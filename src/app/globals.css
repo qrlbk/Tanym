@@ -1,26 +1,298 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-word-blue: #2B579A;
+  --color-word-blue-hover: #1E3F70;
+  --color-canvas-bg: #cfcfcf;
+  --color-toolbar-bg: #F3F3F3;
+  --color-toolbar-border: #D1D1D1;
+  --color-ribbon-active: #FFFFFF;
+  --color-status-bg: #F3F3F3;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Удобнее читать выделенный текст в редакторе */
+::selection {
+  background: rgba(43, 87, 154, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #333;
+  background: var(--color-canvas-bg);
+}
+
+.tiptap {
+  outline: none;
+  min-height: 1px;
+  caret-color: #000;
+  counter-reset: doc-page;
+  width: 100%;
+}
+
+.tiptap:focus-visible {
+  outline: 2px solid rgba(43, 87, 154, 0.35);
+  outline-offset: 2px;
+}
+
+.doc-page-sheet {
+  display: block;
+  width: var(--doc-page-width-px, 793px);
+  max-width: var(--doc-page-width-px, 793px);
+  min-height: var(--doc-page-height-px, 1123px);
+  margin: 0 auto var(--doc-page-gap-px, 16px);
+  box-sizing: border-box;
+  background: #fff;
+  box-shadow: var(--doc-sheet-shadow, 0 0 0 1px #9e9e9e, 0 4px 12px rgba(0, 0, 0, 0.08));
+  position: relative;
+  counter-increment: doc-page;
+  overflow: hidden;
+}
+
+.doc-page-sheet::after {
+  content: counter(doc-page);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(8px, calc(var(--doc-margin-bottom, 56px) * 0.45));
+  text-align: center;
+  font-size: 9px;
+  color: #7a7a7a;
+  pointer-events: none;
+  user-select: none;
+}
+
+.doc-page-body {
+  width: 100%;
+  max-width: 100%;
+  padding: var(--doc-margin-top, 76px) var(--doc-margin-right, 76px) var(--doc-margin-bottom, 76px) var(--doc-margin-left, 76px);
+  box-sizing: border-box;
+  min-height: var(--doc-content-height, 900px);
+}
+
+[data-show-text-boundaries="true"] .doc-page-body {
+  outline: 1px dashed #c4c4c4;
+  outline-offset: -1px;
+}
+
+.tiptap p.is-editor-empty:first-child::before,
+.tiptap .doc-page-body > p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #adb5bd;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+.tiptap p {
+  margin: 0;
+  line-height: 1.15;
+}
+
+.tiptap h1 { font-size: 24px; font-weight: bold; margin: 12px 0 4px; }
+.tiptap h2 { font-size: 18px; font-weight: bold; margin: 10px 0 4px; }
+.tiptap h3 { font-size: 14px; font-weight: bold; margin: 8px 0 4px; }
+.tiptap h4 { font-size: 13px; font-weight: bold; margin: 6px 0 2px; }
+.tiptap h5 { font-size: 12px; font-weight: bold; margin: 4px 0 2px; }
+.tiptap h6 { font-size: 11px; font-weight: bold; margin: 4px 0 2px; }
+
+.tiptap ul { list-style-type: disc; padding-left: 24px; margin: 4px 0; }
+.tiptap ol { list-style-type: decimal; padding-left: 24px; margin: 4px 0; }
+.tiptap li { margin: 2px 0; }
+.tiptap li p { margin: 0; }
+
+.tiptap blockquote {
+  border-left: 3px solid #ccc;
+  margin: 8px 0;
+  padding-left: 12px;
+  color: #666;
+}
+
+.tiptap .tableWrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.tiptap table {
+  border-collapse: collapse;
+  width: 100% !important;
+  max-width: 100%;
+  margin: 8px 0;
+  table-layout: fixed;
+}
+
+.tiptap colgroup,
+.tiptap colgroup col {
+  width: auto !important;
+}
+
+.tiptap th,
+.tiptap td {
+  /* Базовая сетка, если нет inline-стилей из Word */
+  border: 1px solid #b8b8b8;
+  padding: 8px 10px;
+  min-width: 48px;
+  vertical-align: top;
+  position: relative;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.tiptap th p,
+.tiptap td p {
+  margin: 0 0 0.45em 0;
+  line-height: 1.35;
+}
+
+.tiptap th p:last-child,
+.tiptap td p:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap th ul,
+.tiptap td ul,
+.tiptap th ol,
+.tiptap td ol {
+  margin: 0.25em 0 0.5em 0;
+  padding-left: 1.25em;
+}
+
+.tiptap th {
+  background: #ebebeb;
+  font-weight: 600;
+}
+
+.tiptap .selectedCell {
+  background: rgba(200, 200, 255, 0.4);
+}
+
+.tiptap .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #adf;
+  pointer-events: none;
+}
+
+.tiptap img {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+
+.tiptap img.ProseMirror-selectednode {
+  outline: 2px solid #68cef8;
+}
+
+.tiptap a {
+  color: #2B579A;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap hr {
+  border: none;
+  border-top: 1px solid #ccc;
+  margin: 12px 0;
+}
+
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.page-break-node {
+  display: block;
+  width: 100%;
+  height: 0;
+  border: none;
+  border-top: 1px dashed #bbb;
+  margin: 8px 0;
+  page-break-after: always;
+  break-after: page;
+  user-select: none;
+  pointer-events: none;
+}
+
+.page-break-node.ProseMirror-selectednode {
+  border-top-color: #68cef8;
+  border-top-width: 2px;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.resize-cursor {
+  cursor: col-resize;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    overflow: visible;
+  }
+  .doc-page-sheet {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .page-break-node {
+    display: block;
+    height: 0;
+    border: none;
+    page-break-after: always;
+    break-after: page;
+  }
+  .page-spacer {
+    display: none !important;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 2cm;
 }
