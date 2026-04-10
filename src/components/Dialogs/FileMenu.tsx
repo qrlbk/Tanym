@@ -14,6 +14,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { exportToDocx, importDocx, exportToPdf } from "@/lib/file-io";
 import { EMPTY_DOC_JSON, wrapHtmlInDocPage } from "@/lib/migrate-doc-pages";
 import { isTauri, tauriOpenDialog, tauriReadFile } from "@/lib/tauri-helpers";
+import { clearPersistedDocument, persistDocument } from "@/lib/doc-persistence";
 
 export default function FileMenu({
   open,
@@ -34,6 +35,7 @@ export default function FileMenu({
       !window.confirm("Вы уверены? Несохранённые изменения будут потеряны.")
     )
       return;
+    void clearPersistedDocument();
     editor.commands.setContent(EMPTY_DOC_JSON);
     useDocumentStore.getState().setTitle("Документ1");
     useDocumentStore.getState().setDirty(false);
@@ -106,11 +108,15 @@ export default function FileMenu({
   const handleSave = useCallback(() => {
     if (!editor) return;
     const json = editor.getJSON();
-    localStorage.setItem("word-ai-doc", JSON.stringify(json));
-    localStorage.setItem("word-ai-doc-time", new Date().toISOString());
-    useDocumentStore.getState().setDirty(false);
-    useDocumentStore.getState().setLastSaved(new Date());
-    onClose();
+    void persistDocument(json).then((r) => {
+      if (r.ok) {
+        useDocumentStore.getState().setDirty(false);
+        useDocumentStore.getState().setLastSaved(new Date());
+      } else {
+        alert("Не удалось сохранить документ: " + r.reason);
+      }
+      onClose();
+    });
   }, [editor, onClose]);
 
   const handleExportDocx = useCallback(async () => {

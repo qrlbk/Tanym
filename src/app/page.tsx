@@ -30,13 +30,15 @@ export default function Home() {
         <TitleBar onFileMenuOpen={() => setFileMenuOpen(true)} />
         <RibbonTabs />
         <RibbonContent />
-        {showRuler && viewMode === "edit" && <HorizontalRuler />}
-        <div className="flex flex-1 min-h-0">
-          {viewMode === "preview" && previewData ? (
-            <DocxPreview data={previewData} />
-          ) : (
-            <DocumentCanvas />
-          )}
+        <div className="flex flex-1 min-h-0 min-w-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {showRuler && viewMode === "edit" && <HorizontalRuler />}
+            {viewMode === "preview" && previewData ? (
+              <DocxPreview data={previewData} />
+            ) : (
+              <DocumentCanvas />
+            )}
+          </div>
           {aiPanelOpen && <AIPanel />}
         </div>
         <StatusBar />

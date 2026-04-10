@@ -19,6 +19,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useAIStore } from "@/stores/aiStore";
 import { isTauri } from "@/lib/tauri-helpers";
+import { persistDocument } from "@/lib/doc-persistence";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 export default function TitleBar({
@@ -64,10 +65,14 @@ export default function TitleBar({
   const handleSave = () => {
     if (!editor) return;
     const json = editor.getJSON();
-    localStorage.setItem("word-ai-doc", JSON.stringify(json));
-    localStorage.setItem("word-ai-doc-time", new Date().toISOString());
-    useDocumentStore.getState().setDirty(false);
-    useDocumentStore.getState().setLastSaved(new Date());
+    void persistDocument(json).then((r) => {
+      if (r.ok) {
+        useDocumentStore.getState().setDirty(false);
+        useDocumentStore.getState().setLastSaved(new Date());
+      } else {
+        alert("Не удалось сохранить документ: " + r.reason);
+      }
+    });
   };
 
   const handleMinimize = useCallback(async () => {

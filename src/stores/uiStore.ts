@@ -62,6 +62,7 @@ export const useUIStore = create<UIState>((set) => ({
   setViewMode: (viewMode) => set({ viewMode }),
   previewData: null,
   setPreviewData: (previewData) => set({ previewData }),
-  showTextBoundaries: true,
+  /** Как в Word по умолчанию — без пунктира вокруг области набора. */
+  showTextBoundaries: false,
   setShowTextBoundaries: (showTextBoundaries) => set({ showTextBoundaries }),
 }));

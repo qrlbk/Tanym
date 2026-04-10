@@ -25,7 +25,7 @@ export default function HorizontalRuler() {
 
   const geo = computePageGeometry(orientation, margins);
   const scale = zoom / 100;
-  const scaledPageWidthPx = geo.pageWidthPx * scale;
+  const scaledPageWidthPx = Math.ceil(geo.pageWidthPx * scale);
   const scaledMarginLeftPx = geo.marginLeftPx * scale;
   const scaledMarginRightPx = geo.marginRightPx * scale;
   const scaledContentWidthPx = geo.contentWidthPx * scale;
@@ -147,7 +147,7 @@ export default function HorizontalRuler() {
   return (
     <div
       ref={rulerRef}
-      className="shrink-0 relative select-none overflow-hidden"
+      className="relative w-full shrink-0 select-none overflow-hidden"
       style={{
         height: RULER_HEIGHT,
         background: "#F3F3F3",

@@ -3,7 +3,7 @@
 @theme inline {
   --color-word-blue: #2B579A;
   --color-word-blue-hover: #1E3F70;
-  --color-canvas-bg: #cfcfcf;
+  --color-canvas-bg: #e8e8e8;
   --color-toolbar-bg: #F3F3F3;
   --color-toolbar-border: #D1D1D1;
   --color-ribbon-active: #FFFFFF;
@@ -53,12 +53,18 @@ html, body {
   outline-offset: 2px;
 }
 
+/* Фиксированная высота листа (A4 в px). Иначе min-height без max-height растягивает лист на весь текст — «одна бесконечная страница». */
 .doc-page-sheet {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
   width: var(--doc-page-width-px, 793px);
   max-width: var(--doc-page-width-px, 793px);
+  min-width: var(--doc-page-width-px, 793px);
+  height: var(--doc-page-height-px, 1123px);
   min-height: var(--doc-page-height-px, 1123px);
-  margin: 0 auto var(--doc-page-gap-px, 16px);
+  max-height: var(--doc-page-height-px, 1123px);
+  margin: 0 auto var(--doc-page-gap-px, 24px);
   box-sizing: border-box;
   background: #fff;
   box-shadow: var(--doc-sheet-shadow, 0 0 0 1px #9e9e9e, 0 4px 12px rgba(0, 0, 0, 0.08));
@@ -81,11 +87,13 @@ html, body {
 }
 
 .doc-page-body {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   max-width: 100%;
   padding: var(--doc-margin-top, 76px) var(--doc-margin-right, 76px) var(--doc-margin-bottom, 76px) var(--doc-margin-left, 76px);
   box-sizing: border-box;
-  min-height: var(--doc-content-height, 900px);
+  position: relative;
 }
 
 [data-show-text-boundaries="true"] .doc-page-body {

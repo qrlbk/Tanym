@@ -5,6 +5,7 @@ import { useEditor, Editor } from "@tiptap/react";
 import { getExtensions } from "./extensions";
 import { useDocumentStore } from "@/stores/documentStore";
 import { EMPTY_DOC_JSON, migrateDocJson } from "@/lib/migrate-doc-pages";
+import { loadDocumentRaw, persistDocument } from "@/lib/doc-persistence";
 import { useFontStore } from "@/stores/fontStore";
 
 const EditorContext = createContext<Editor | null>(null);
@@ -54,10 +55,14 @@ export default function EditorProvider({ children }: { children: React.ReactNode
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         const json = editor.getJSON();
-        localStorage.setItem("word-ai-doc", JSON.stringify(json));
-        localStorage.setItem("word-ai-doc-time", new Date().toISOString());
-        useDocumentStore.getState().setDirty(false);
-        useDocumentStore.getState().setLastSaved(new Date());
+        void persistDocument(json).then((r) => {
+          if (r.ok) {
+            useDocumentStore.getState().setDirty(false);
+            useDocumentStore.getState().setLastSaved(new Date());
+          } else {
+            alert("Не удалось сохранить документ: " + r.reason);
+          }
+        });
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "p") {
         e.preventDefault();
@@ -75,15 +80,19 @@ export default function EditorProvider({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (!editor) return;
-    const saved = localStorage.getItem("word-ai-doc");
-    if (saved) {
+    let cancelled = false;
+    void loadDocumentRaw().then((saved) => {
+      if (cancelled || !saved) return;
       try {
         editor.commands.setContent(migrateDocJson(JSON.parse(saved)));
         useDocumentStore.getState().setDirty(false);
       } catch {
         // ignore parse errors
       }
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [editor]);
 
   return (
