@@ -1,0 +1,7 @@
+Tanym
+Copyright 2026 The Tanym Authors
+
+This product includes software developed as part of the Tanym project.
+
+Third-party open-source components are listed in THIRD_PARTY_NOTICES.md.
+Dependency license texts appear under node_modules/ and in Rust crate metadata.

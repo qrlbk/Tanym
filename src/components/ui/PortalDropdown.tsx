@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { UI_COLORS } from "@/lib/theme/colors";
 
 function useAnchorPos(anchorRef: React.RefObject<HTMLElement | null>, isOpen: boolean) {
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, anchorH: 0 });
@@ -19,6 +20,7 @@ export function PortalDropdown({
   onClose,
   width,
   maxHeight = 320,
+  variant = "light",
   children,
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -26,6 +28,7 @@ export function PortalDropdown({
   onClose: () => void;
   width: number;
   maxHeight?: number;
+  variant?: "light" | "dark";
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -63,10 +66,23 @@ export function PortalDropdown({
     left = window.innerWidth - width - 8;
   }
 
+  const panelStyle =
+    variant === "dark"
+      ? {
+          borderColor: UI_COLORS.shellBorder,
+          background: UI_COLORS.shellBgElevated,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+        }
+      : {};
+
   return createPortal(
     <div
       ref={ref}
-      className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-y-auto"
+      className={
+        variant === "dark"
+          ? "overflow-y-auto rounded-[10px] border shadow-xl"
+          : "overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-xl"
+      }
       style={{
         position: "fixed",
         top: flipUp ? undefined : top,
@@ -74,7 +90,8 @@ export function PortalDropdown({
         left: Math.max(4, left),
         width,
         maxHeight: finalMaxH,
-        zIndex: 9999,
+        zIndex: 10050,
+        ...panelStyle,
       }}
     >
       {children}

@@ -15,6 +15,7 @@
     "core:window:allow-is-maximized",
     "core:window:allow-toggle-maximize",
     "core:window:allow-set-fullscreen",
+    "core:window:allow-set-simple-fullscreen",
     "dialog:default",
     "fs:default"
   ]

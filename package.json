@@ -1,17 +1,36 @@
 {
-  "name": "word",
+  "name": "tanym",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/qrlbk/Tanym#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qrlbk/Tanym.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qrlbk/Tanym/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "analyze": "ANALYZE=true next build",
+    "test": "vitest run",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.71",
+    "@ai-sdk/google": "^3.0.64",
     "@ai-sdk/openai": "^3.0.52",
     "@ai-sdk/react": "^3.0.156",
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -26,10 +45,12 @@
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-fs": "^2.5.0",
     "@tiptap/extension-color": "^3.22.3",
+    "@tiptap/extension-drag-handle": "^3.22.3",
     "@tiptap/extension-font-family": "^3.22.3",
     "@tiptap/extension-highlight": "^3.22.3",
     "@tiptap/extension-image": "^3.22.3",
     "@tiptap/extension-link": "^3.22.3",
+    "@tiptap/extension-node-range": "^3.22.3",
     "@tiptap/extension-placeholder": "^3.22.3",
     "@tiptap/extension-subscript": "^3.22.3",
     "@tiptap/extension-superscript": "^3.22.3",
@@ -61,15 +82,20 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.3",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@tauri-apps/cli": "^2.10.1",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
+    "happy-dom": "^20.8.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.4"
   }
 }

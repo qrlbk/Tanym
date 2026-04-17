@@ -1,71 +1,281 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
-import type { UIMessage } from "ai";
+/**
+ * TODO (roadmap фаза 4 → «Разбиение god-компонентов»).
+ *
+ * Целевая структура:
+ *   AI/
+ *     AIPanel.tsx              (shell + режимы — < 200 строк)
+ *     ChatView.tsx             (список сообщений + composer)
+ *     QuickCommandsBar.tsx
+ *     SessionSidebar.tsx       (история чатов)
+ *     hooks/
+ *       useAIComposer.ts
+ *       useActiveSession.ts
+ *
+ * Пока не декомпозировано: streaming-чат без визуального e2e рискован.
+ * Перед разбиением — поднять smoke-тест на реальном провайдере
+ * (моки /api/ai/chat) и только потом распиливать.
+ */
+
+import {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useState,
+  useMemo,
+} from "react";
+import { DefaultChatTransport } from "ai";
+import type { ChatStatus, UIMessage } from "ai";
 import { useEditorContext } from "@/components/Editor/EditorProvider";
 import { useAIStore } from "@/stores/aiStore";
-import { executeToolCall } from "@/lib/ai/client-tools";
-import { QUICK_COMMANDS } from "@/lib/ai/system-prompt";
+import { buildEditorContextPayload } from "@/lib/ai/editor-context";
+import { buildCharacterContextSummary } from "@/lib/ai/character-context";
+import { buildProjectContextFromStores } from "@/lib/ai/project-context";
+import { useProjectStore } from "@/stores/projectStore";
+import { usePlotStoryStore } from "@/stores/plotStoryStore";
+import { useUIStore } from "@/stores/uiStore";
 import { PROVIDERS } from "@/lib/ai/providers";
-import type { ProviderId } from "@/lib/ai/providers";
 import {
   X,
-  Send,
-  Bot,
-  User,
-  Loader2,
-  Wrench,
-  ChevronDown,
-  ChevronRight,
   Sparkles,
   Settings2,
+  Trash2,
+  Loader2,
+  MessageSquarePlus,
+  History,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
+import { formatShortcut, getPrimaryModifierLabel } from "@/lib/platform";
+import { THEME, UI_COLORS } from "@/lib/theme/colors";
+import { useAiChatSessionStore } from "@/stores/aiChatSessionStore";
+import { loadAiChats, saveAiChats } from "@/lib/ai-chat-persistence";
+import {
+  AIChatSessionWorker,
+  type ChatHandlerEntry,
+} from "@/components/AI/AIChatSessionWorker";
+import {
+  getTextFromAssistantMessage,
+  getTextFromUserMessage,
+} from "@/lib/ai/chat-message-utils";
 
-export default function AIPanel() {
+const EMPTY_CHAT_MESSAGES: UIMessage[] = [];
+
+export default function AIPanel({
+  embedded = false,
+  forceOpen = false,
+}: {
+  embedded?: boolean;
+  forceOpen?: boolean;
+}) {
   const panelOpen = useAIStore((s) => s.panelOpen);
   const setPanelOpen = useAIStore((s) => s.setPanelOpen);
   const togglePanel = useAIStore((s) => s.togglePanel);
   const providerId = useAIStore((s) => s.providerId);
   const setProviderId = useAIStore((s) => s.setProviderId);
+  const aiMode = useAIStore((s) => s.mode);
+  const setAiMode = useAIStore((s) => s.setMode);
+  const pendingConfirmation = useAIStore((s) => s.pendingConfirmation);
+  const setPendingConfirmation = useAIStore((s) => s.setPendingConfirmation);
+  const focusedCharacterId = useAIStore((s) => s.focusedCharacterId);
+  const setFocusedCharacterId = useAIStore((s) => s.setFocusedCharacterId);
+  const focusedName = useProjectStore((s) => {
+    if (!focusedCharacterId || !s.project) return null;
+    return (
+      s.project.characterProfiles.find((c) => c.id === focusedCharacterId)?.displayName ?? null
+    );
+  });
+  const project = useProjectStore((s) => s.project);
+  const persistKey = project?.id ?? "__no_project__";
+
+  const sessions = useAiChatSessionStore((s) => s.sessions);
+  const activeSessionId = useAiChatSessionStore((s) => s.activeSessionId);
+  const hydrate = useAiChatSessionStore((s) => s.hydrate);
+  const setProjectIdStore = useAiChatSessionStore((s) => s.setProjectId);
+  const createSession = useAiChatSessionStore((s) => s.createSession);
+  const deleteSession = useAiChatSessionStore((s) => s.deleteSession);
+  const setActiveSession = useAiChatSessionStore((s) => s.setActiveSession);
+  const sessionStatus = useAiChatSessionStore((s) => s.sessionStatus);
+  const updateSession = useAiChatSessionStore((s) => s.updateSession);
+
   const editor = useEditorContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [inputValue, setInputValue] = useState("");
-  const [showQuickCommands, setShowQuickCommands] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [showHistorySidebar, setShowHistorySidebar] = useState(!embedded);
+  const [bootReady, setBootReady] = useState(false);
+  const [bootMessages, setBootMessages] = useState<Record<string, UIMessage[]> | null>(null);
+  const modLabel = getPrimaryModifierLabel();
 
   const editorRef = useRef(editor);
-  editorRef.current = editor;
+  useLayoutEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
-  const { messages, sendMessage, status, stop, addToolResult, error, clearError } = useChat({
-    transport: new DefaultChatTransport({
-      api: "/api/ai/chat",
-      body: { providerId },
-    }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    onToolCall: async ({ toolCall }) => {
-      const input = "input" in toolCall ? toolCall.input : {};
-      const result = await executeToolCall(
-        toolCall.toolName,
-        input as Record<string, unknown>,
-        editorRef.current,
-      );
-      // Must not await addToolResult: onToolCall runs inside the chat jobExecutor;
-      // awaiting would deadlock (queued job waits for the current job to finish).
-      void addToolResult({
-        toolCallId: toolCall.toolCallId,
-        tool: toolCall.toolName,
-        output: result,
-      });
-    },
-    onError: (err) => {
-      console.error("AI chat error:", err);
-    },
-  });
+  const messagesBySessionRef = useRef<Record<string, UIMessage[]>>({});
+  const chatHandlersRef = useRef<Map<string, ChatHandlerEntry>>(new Map());
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleRequestedRef = useRef(new Set<string>());
 
-  const isLoading = status === "streaming" || status === "submitted";
+  const scheduleSave = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const payload = useAiChatSessionStore
+        .getState()
+        .buildPersistedPayload(messagesBySessionRef.current);
+      if (payload) void saveAiChats(persistKey, payload);
+    }, 420);
+  }, [persistKey]);
+
+  const onMessagesSnapshot = useCallback(
+    (id: string, msgs: UIMessage[]) => {
+      messagesBySessionRef.current[id] = msgs;
+      scheduleSave();
+    },
+    [scheduleSave],
+  );
+
+  const onStatus = useCallback((id: string, status: ChatStatus) => {
+    useAiChatSessionStore.getState().setSessionStatus(id, status);
+  }, []);
+
+  const onAssistantRoundFinished = useCallback(
+    async (sessionId: string, msgs: UIMessage[]) => {
+      const meta = useAiChatSessionStore.getState().sessions.find((s) => s.id === sessionId);
+      if (!meta || meta.titleGenerated) return;
+      const users = msgs.filter((m) => m.role === "user");
+      const assistants = msgs.filter((m) => m.role === "assistant");
+      if (users.length === 0 || assistants.length === 0) return;
+      if (titleRequestedRef.current.has(sessionId)) return;
+      titleRequestedRef.current.add(sessionId);
+      const firstUserText = getTextFromUserMessage(users[0]);
+      const assistantPreview = getTextFromAssistantMessage(assistants[assistants.length - 1]);
+      try {
+        const res = await fetch("/api/ai/chat-title", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerId: useAIStore.getState().providerId,
+            firstUserText,
+            assistantPreview,
+          }),
+        });
+        const data = (await res.json()) as { title?: string };
+        if (data.title && typeof data.title === "string") {
+          updateSession(sessionId, { title: data.title, titleGenerated: true });
+        } else {
+          titleRequestedRef.current.delete(sessionId);
+        }
+      } catch {
+        titleRequestedRef.current.delete(sessionId);
+      }
+    },
+    [updateSession],
+  );
+
+  useEffect(() => {
+    setProjectIdStore(persistKey);
+    setBootReady(false);
+    let cancelled = false;
+    void loadAiChats(persistKey).then((data) => {
+      if (cancelled) return;
+      hydrate(data);
+      const next = { ...(data?.messagesBySessionId ?? {}) };
+      messagesBySessionRef.current = next;
+      setBootMessages(next);
+      setBootReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [persistKey, hydrate, setProjectIdStore]);
+
+  useEffect(() => {
+    const ids = new Set(sessions.map((s) => s.id));
+    for (const k of Object.keys(messagesBySessionRef.current)) {
+      if (!ids.has(k)) delete messagesBySessionRef.current[k];
+    }
+  }, [sessions]);
+
+  const chatTransport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/ai/chat",
+        prepareSendMessagesRequest: async ({
+          body,
+          id,
+          messages: reqMessages,
+          trigger,
+          messageId,
+        }) => {
+          const focusedId = useAIStore.getState().focusedCharacterId;
+          const proj = useProjectStore.getState().project;
+          const prof =
+            focusedId && proj?.characterProfiles.find((c) => c.id === focusedId);
+          const facts = usePlotStoryStore.getState().facts;
+          const characterContext =
+            prof ? buildCharacterContextSummary(prof, facts) : null;
+          const activeSceneId = useUIStore.getState().activeSceneId;
+          const projectContext = buildProjectContextFromStores(
+            proj,
+            activeSceneId,
+            editorRef.current,
+          );
+          return {
+            body: {
+              ...(body && typeof body === "object" ? body : {}),
+              id,
+              messages: reqMessages,
+              trigger,
+              messageId,
+              providerId: useAIStore.getState().providerId,
+              editorContext: buildEditorContextPayload(editorRef.current),
+              characterContext,
+              projectContext,
+            },
+          };
+        },
+      }),
+    [],
+  );
+
+  const confirmReplaceDocument = useCallback(() => {
+    const pending = useAIStore.getState().pendingConfirmation;
+    const ed = editorRef.current;
+    if (!pending || pending.toolName !== "set_document_content" || !ed) {
+      setPendingConfirmation(null);
+      return;
+    }
+    ed.commands.setContent(pending.args.html as string);
+    const h = chatHandlersRef.current.get(pending.sessionId);
+    h?.addToolResult({
+      toolCallId: pending.toolCallId,
+      tool: pending.toolName,
+      output: "Document content replaced successfully.",
+    });
+    setPendingConfirmation(null);
+  }, [setPendingConfirmation]);
+
+  const cancelReplaceDocument = useCallback(() => {
+    const pending = useAIStore.getState().pendingConfirmation;
+    if (!pending) return;
+    const h = chatHandlersRef.current.get(pending.sessionId);
+    h?.addToolResult({
+      toolCallId: pending.toolCallId,
+      tool: pending.toolName,
+      output:
+        "Пользователь отменил замену всего документа. Документ не изменён.",
+    });
+    setPendingConfirmation(null);
+  }, [setPendingConfirmation]);
+
+  const clearChat = useCallback(() => {
+    if (!activeSessionId) return;
+    const h = chatHandlersRef.current.get(activeSessionId);
+    h?.setMessages([]);
+    h?.clearError();
+  }, [activeSessionId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -78,350 +288,330 @@ export default function AIPanel() {
     return () => window.removeEventListener("keydown", handler);
   }, [togglePanel]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  if (!panelOpen && !forceOpen) return null;
 
-  useEffect(() => {
-    if (panelOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [panelOpen]);
-
-  const handleSend = useCallback(
-    (text?: string) => {
-      const msg = text ?? inputValue.trim();
-      if (!msg || isLoading) return;
-      setInputValue("");
-      sendMessage({ text: msg });
-    },
-    [inputValue, isLoading, sendMessage],
-  );
-
-  const handleQuickCommand = useCallback(
-    (prompt: string) => {
-      setShowQuickCommands(false);
-      handleSend(prompt);
-    },
-    [handleSend],
-  );
-
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend],
-  );
-
-  if (!panelOpen) return null;
+  const activeMeta = sessions.find((s) => s.id === activeSessionId);
 
   return (
     <div
-      className="flex flex-col h-full border-l border-gray-300 bg-white"
-      style={{ width: 380, minWidth: 320 }}
+      className={`relative flex flex-col h-full ${embedded ? "" : "border-l"}`}
+      style={{
+        background: THEME.surface.cardMuted,
+        color: UI_COLORS.storyPanel.textPrimary,
+        ...(embedded ? {} : { width: 380, minWidth: 320, borderColor: UI_COLORS.storyPanel.border }),
+      }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-blue-600" />
-          <span className="text-sm font-semibold text-gray-800">
-            ИИ Ассистент
+      <div
+        className="flex items-center justify-between px-3 py-2 border-b shrink-0"
+        style={{
+          borderColor: UI_COLORS.storyPanel.border,
+          background: `linear-gradient(to right, ${UI_COLORS.storyPanel.headerFrom}, ${UI_COLORS.storyPanel.headerTo})`,
+        }}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {embedded && (
+            <button
+              type="button"
+              onClick={() => setShowHistorySidebar((v) => !v)}
+              className="p-1 rounded shrink-0"
+              style={{ color: UI_COLORS.storyPanel.textMuted }}
+              title={showHistorySidebar ? "Скрыть историю" : "История чатов"}
+            >
+              {showHistorySidebar ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+            </button>
+          )}
+          <Sparkles size={16} style={{ color: THEME.accent.primaryBorder }} className="shrink-0" />
+          <span
+            className="text-sm font-semibold truncate"
+            style={{ color: UI_COLORS.storyPanel.textPrimary }}
+            title={activeMeta?.title ?? "ИИ Ассистент"}
+          >
+            {activeMeta?.title ?? "ИИ Ассистент"}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              createSession();
+            }}
+            className="p-1 rounded"
+            style={{ color: UI_COLORS.storyPanel.textMuted }}
+            title="Новый чат"
+          >
+            <MessageSquarePlus size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setAiMode(aiMode === "agent" ? "chat" : "agent")}
+            className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+            style={{
+              color: aiMode === "agent" ? "#fff" : UI_COLORS.storyPanel.textSecondary,
+              background:
+                aiMode === "agent"
+                  ? UI_COLORS.accentPrimaryBg
+                  : "transparent",
+              border: `1px solid ${
+                aiMode === "agent"
+                  ? UI_COLORS.accentPrimaryBg
+                  : THEME.surface.inputBorder
+              }`,
+            }}
+            title="Режим агента: планирование + подтверждение + выполнение"
+          >
+            {aiMode === "agent" ? "Агент" : "Чат"}
+          </button>
+          <button
+            type="button"
+            onClick={clearChat}
+            className="p-1 rounded"
+            style={{ color: UI_COLORS.storyPanel.textMuted }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = UI_COLORS.storyPanel.closeHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+            title="Очистить чат"
+            disabled={!activeSessionId}
+          >
+            <Trash2 size={14} />
+          </button>
           <div className="relative">
             <button
+              type="button"
               onClick={() => setShowModelSelector(!showModelSelector)}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:bg-gray-200"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]"
+              style={{ color: UI_COLORS.storyPanel.textSecondary }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = UI_COLORS.storyPanel.tabHoverBg;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
               title="Выбрать модель"
             >
               <Settings2 size={11} />
               {PROVIDERS.find((p) => p.id === providerId)?.label}
             </button>
             {showModelSelector && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-[200px]">
+              <div
+                className="absolute right-0 top-full mt-1 rounded-lg shadow-lg z-50 w-[200px] border"
+                style={{
+                  background: THEME.surface.card,
+                  borderColor: THEME.surface.inputBorder,
+                }}
+              >
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.id}
+                    type="button"
                     onClick={() => {
                       setProviderId(p.id);
                       setShowModelSelector(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-0 ${
-                      p.id === providerId ? "bg-blue-50 font-medium" : ""
-                    }`}
+                    className="w-full text-left px-3 py-2 text-xs border-b last:border-0"
+                    style={{
+                      borderColor: THEME.surface.inputBorder,
+                      background:
+                        p.id === providerId ? THEME.accent.subtleBg : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (p.id !== providerId) {
+                        e.currentTarget.style.background = THEME.surface.elevated;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (p.id !== providerId) {
+                        e.currentTarget.style.background = "transparent";
+                      }
+                    }}
                   >
-                    <div className="font-medium text-gray-700">{p.label}</div>
-                    <div className="text-gray-400 text-[10px]">{p.description}</div>
+                    <div className="font-medium" style={{ color: UI_COLORS.storyPanel.textPrimary }}>
+                      {p.label}
+                    </div>
+                    <div className="text-[10px]" style={{ color: UI_COLORS.storyPanel.textMuted }}>
+                      {p.description}
+                    </div>
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <span className="text-[10px] text-gray-400">Ctrl+L</span>
-          <button
-            onClick={() => setPanelOpen(false)}
-            className="p-1 rounded hover:bg-gray-200"
-          >
-            <X size={14} className="text-gray-500" />
-          </button>
+          {!embedded && (
+            <span className="text-[10px]" style={{ color: UI_COLORS.storyPanel.textMuted }}>
+              {formatShortcut([modLabel, "L"])}
+            </span>
+          )}
+          {!embedded && (
+            <button
+              type="button"
+              onClick={() => setPanelOpen(false)}
+              className="p-1 rounded"
+              style={{ color: UI_COLORS.storyPanel.textMuted }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = UI_COLORS.storyPanel.closeHover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-            <p className="font-medium">Ошибка запроса</p>
-            <p className="mt-1 break-words">{error.message}</p>
-            <button
-              type="button"
-              onClick={() => clearError()}
-              className="mt-2 text-red-600 underline hover:text-red-800"
-            >
-              Закрыть
-            </button>
-          </div>
-        )}
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 gap-3 py-8">
-            <Sparkles size={32} className="text-blue-300" />
-            <p className="text-sm">Спросите что-нибудь или выберите команду</p>
-            <div className="grid grid-cols-2 gap-1.5 w-full max-w-[300px]">
-              {QUICK_COMMANDS.slice(0, 6).map((cmd) => (
-                <button
-                  key={cmd.id}
-                  onClick={() => handleQuickCommand(cmd.prompt)}
-                  className="text-[11px] text-left px-2 py-1.5 rounded-md border border-gray-200 hover:bg-blue-50 hover:border-blue-300 text-gray-600 transition-colors"
-                >
-                  {cmd.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
-
-        {isLoading && (
-          <div className="flex items-center gap-2 text-gray-400 text-sm pl-7">
-            <Loader2 size={14} className="animate-spin" />
-            <span>Думаю...</span>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Quick commands dropdown */}
-      {showQuickCommands && (
-        <div className="mx-3 mb-1 max-h-[200px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
-          {QUICK_COMMANDS.map((cmd) => (
-            <button
-              key={cmd.id}
-              onClick={() => handleQuickCommand(cmd.prompt)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 text-gray-700 border-b border-gray-100 last:border-0"
-            >
-              {cmd.label}
-            </button>
-          ))}
+      {focusedName && (
+        <div
+          className="flex items-center justify-between px-3 py-1.5 border-b text-[11px] shrink-0"
+          style={{
+            borderColor: UI_COLORS.storyPanel.border,
+            background: THEME.surface.card,
+            color: UI_COLORS.storyPanel.textSecondary,
+          }}
+        >
+          <span className="truncate pr-2">
+            Персонаж:{" "}
+            <span style={{ color: UI_COLORS.storyPanel.textPrimary }}>{focusedName}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setFocusedCharacterId(null)}
+            className="shrink-0 underline underline-offset-2"
+            style={{ color: THEME.accent.primaryBorder }}
+          >
+            Сбросить
+          </button>
         </div>
       )}
 
-      {/* Input */}
-      <div className="border-t border-gray-200 p-2">
-        <div className="flex items-end gap-1.5">
-          <button
-            type="button"
-            onClick={() => setShowQuickCommands(!showQuickCommands)}
-            className="p-1.5 rounded hover:bg-gray-100 shrink-0 mb-0.5"
-            title="Быстрые команды"
-          >
-            <Sparkles size={16} className="text-blue-500" />
-          </button>
-          <textarea
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Спросите ИИ..."
-            rows={1}
-            className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
-            style={{ maxHeight: 120, minHeight: 36 }}
-            onInput={(e) => {
-              const t = e.currentTarget;
-              t.style.height = "auto";
-              t.style.height = Math.min(t.scrollHeight, 120) + "px";
+      <div className="flex flex-1 min-h-0 flex-row">
+        {showHistorySidebar && (
+          <div
+            className="w-[124px] shrink-0 border-r overflow-y-auto py-1 px-1 flex flex-col gap-0.5"
+            style={{
+              borderColor: UI_COLORS.storyPanel.border,
+              background: THEME.surface.card,
             }}
-          />
-          {isLoading ? (
-            <button
-              type="button"
-              onClick={stop}
-              className="p-1.5 rounded bg-red-500 text-white hover:bg-red-600 shrink-0 mb-0.5"
-              title="Остановить"
+          >
+            <div
+              className="text-[9px] uppercase tracking-wide px-1.5 py-1 flex items-center gap-1"
+              style={{ color: UI_COLORS.storyPanel.textMuted }}
             >
-              <X size={16} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleSend()}
-              disabled={!inputValue.trim()}
-              className="p-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 mb-0.5"
-            >
-              <Send size={16} />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MessageBubble({ message }: { message: UIMessage }) {
-  if (message.role === "user") {
-    const textParts = message.parts.filter((p) => p.type === "text");
-    const text = textParts.map((p) => p.text).join("");
-    if (!text) return null;
-
-    return (
-      <div className="flex gap-2 justify-end">
-        <div className="bg-blue-600 text-white rounded-xl rounded-br-sm px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap">
-          {text}
-        </div>
-        <User size={20} className="text-blue-600 shrink-0 mt-1" />
-      </div>
-    );
-  }
-
-  if (message.role === "assistant") {
-    return (
-      <div className="flex gap-2">
-        <Bot size={20} className="text-purple-600 shrink-0 mt-1" />
-        <div className="flex-1 space-y-2">
-          {message.parts.map((part, i) => {
-            if (part.type === "text" && part.text) {
+              <History size={10} />
+              Чаты
+            </div>
+            {sessions.map((s) => {
+              const st = sessionStatus[s.id];
+              const busy = st === "submitted" || st === "streaming";
+              const isSel = s.id === activeSessionId;
               return (
-                <div
-                  key={i}
-                  className="bg-gray-100 rounded-xl rounded-bl-sm px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap"
-                >
-                  {part.text}
+                <div key={s.id} className="flex items-center gap-0.5 group">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSession(s.id)}
+                    className="flex-1 min-w-0 text-left text-[10px] px-1.5 py-1 rounded truncate flex items-center gap-1"
+                    style={{
+                      background: isSel ? THEME.accent.subtleBg : "transparent",
+                      color: UI_COLORS.storyPanel.textPrimary,
+                      border: isSel ? `1px solid ${THEME.accent.primaryBorder}` : "1px solid transparent",
+                    }}
+                    title={s.title}
+                  >
+                    {busy && (
+                      <Loader2 size={10} className="animate-spin shrink-0" style={{ color: THEME.accent.primaryBorder }} />
+                    )}
+                    <span className="truncate">{s.title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSession(s.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-[9px]"
+                    style={{ color: UI_COLORS.storyPanel.textMuted }}
+                    title="Удалить"
+                  >
+                    <X size={10} />
+                  </button>
                 </div>
               );
-            }
+            })}
+          </div>
+        )}
 
-            if (
-              part.type === "dynamic-tool" ||
-              part.type.startsWith("tool-")
-            ) {
-              const inv = part as unknown as {
-                toolName: string;
-                toolCallId: string;
-                input?: Record<string, unknown>;
-                state: string;
-                output?: unknown;
-              };
-              return (
-                <ToolCallCard
-                  key={inv.toolCallId || i}
-                  toolName={inv.toolName}
-                  args={inv.input ?? {}}
-                  state={inv.state}
-                  result={inv.output}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          {!bootReady || !bootMessages ? (
+            <div
+              className="flex-1 flex items-center justify-center gap-2 text-xs"
+              style={{ color: UI_COLORS.storyPanel.textMuted }}
+            >
+              <Loader2 size={16} className="animate-spin" />
+              Загрузка…
+            </div>
+          ) : (
+            <>
+              {sessions.map((s) => (
+                <AIChatSessionWorker
+                  key={`${persistKey}-${s.id}`}
+                  sessionId={s.id}
+                  isActive={s.id === activeSessionId}
+                  initialMessages={bootMessages[s.id] ?? EMPTY_CHAT_MESSAGES}
+                  transport={chatTransport}
+                  editorRef={editorRef}
+                  chatHandlersRef={chatHandlersRef}
+                  messagesEndRef={messagesEndRef}
+                  onMessagesSnapshot={onMessagesSnapshot}
+                  onStatus={onStatus}
+                  onAssistantRoundFinished={onAssistantRoundFinished}
                 />
-              );
-            }
-
-            return null;
-          })}
+              ))}
+            </>
+          )}
         </div>
       </div>
-    );
-  }
 
-  return null;
-}
-
-const FRIENDLY_NAMES: Record<string, string> = {
-  get_document_stats: "Статистика документа",
-  get_plaintext: "Чтение текста",
-  get_selection: "Чтение выделения",
-  get_outline: "Структура документа",
-  insert_content: "Вставка контента",
-  replace_selection: "Замена выделения",
-  set_document_content: "Замена документа",
-  apply_formatting: "Форматирование",
-  find_and_replace: "Найти и заменить",
-  set_document_title: "Заголовок документа",
-  set_ribbon_tab: "Переключение вкладки",
-  set_zoom: "Масштаб",
-  toggle_ruler: "Линейка",
-  open_find_replace: "Найти и заменить",
-};
-
-function ToolCallCard({
-  toolName,
-  args,
-  state,
-  result,
-}: {
-  toolName: string;
-  args: Record<string, unknown>;
-  state: string;
-  result?: unknown;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const isPending = state === "call" || state === "partial-call";
-
-  return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden text-xs">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-gray-100 transition-colors"
-      >
-        {isPending ? (
-          <Loader2 size={12} className="animate-spin text-blue-500" />
-        ) : (
-          <Wrench size={12} className="text-green-600" />
-        )}
-        <span className="font-medium text-gray-700">
-          {FRIENDLY_NAMES[toolName] || toolName}
-        </span>
-        <span className="ml-auto">
-          {expanded ? (
-            <ChevronDown size={12} className="text-gray-400" />
-          ) : (
-            <ChevronRight size={12} className="text-gray-400" />
-          )}
-        </span>
-      </button>
-      {expanded && (
-        <div className="px-2.5 pb-2 space-y-1 border-t border-gray-200 pt-1.5">
-          {Object.keys(args).length > 0 && (
-            <div>
-              <span className="text-gray-400">Параметры:</span>
-              <pre className="text-[10px] text-gray-600 bg-white rounded p-1.5 mt-0.5 overflow-x-auto max-h-[100px]">
-                {JSON.stringify(args, null, 2)}
-              </pre>
+      {pendingConfirmation?.toolName === "set_document_content" &&
+        pendingConfirmation.sessionId === activeSessionId && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="rounded-lg shadow-xl border max-w-sm w-full p-4 space-y-3"
+            style={{
+              background: THEME.surface.card,
+              borderColor: THEME.surface.inputBorder,
+            }}
+          >
+            <p className="text-sm font-semibold" style={{ color: UI_COLORS.storyPanel.textPrimary }}>
+              Заменить весь документ?
+            </p>
+            <p className="text-xs leading-relaxed" style={{ color: UI_COLORS.storyPanel.textSecondary }}>
+              Текущее содержимое будет полностью удалено и заменено новым HTML.
+              Это действие нельзя отменить через ИИ.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={cancelReplaceDocument}
+                className="px-3 py-1.5 text-xs rounded-md border"
+                style={{
+                  borderColor: THEME.surface.inputBorder,
+                  color: UI_COLORS.storyPanel.textSecondary,
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={confirmReplaceDocument}
+                className="px-3 py-1.5 text-xs rounded-md text-white"
+                style={{ background: THEME.danger.text }}
+              >
+                Заменить
+              </button>
             </div>
-          )}
-          {result !== undefined && (
-            <div>
-              <span className="text-gray-400">Результат:</span>
-              <pre className="text-[10px] text-gray-600 bg-white rounded p-1.5 mt-0.5 overflow-x-auto max-h-[100px]">
-                {typeof result === "string"
-                  ? result.slice(0, 500)
-                  : JSON.stringify(result, null, 2)?.slice(0, 500)}
-              </pre>
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>

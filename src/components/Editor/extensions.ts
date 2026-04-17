@@ -12,8 +12,8 @@ import Typography from "@tiptap/extension-typography";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import Link from "@tiptap/extension-link";
-import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
+import DragHandle from "@tiptap/extension-drag-handle";
 import {
   TableCellPreservingStyle,
   TableHeaderPreservingStyle,
@@ -23,6 +23,11 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Extension } from "@tiptap/react";
 import { Indent } from "./extensions/Indent";
+import { SearchHighlight } from "./extensions/SearchHighlight";
+import { TableLayout } from "./extensions/TableLayout";
+import { ContinuityMarkers } from "./extensions/ContinuityMarkers";
+import { BlockId } from "./extensions/BlockId";
+import { WarningMark } from "./extensions/WarningMark";
 
 const FontSize = Extension.create({
   name: "fontSize",
@@ -73,13 +78,12 @@ const LineHeight = Extension.create({
   },
 });
 
-export function getExtensions() {
+export function getExtensions(options?: { paged?: boolean }) {
+  const paged = options?.paged ?? true;
   return [
-    PagedDocument,
-    DocPage,
-    DocPageCommands,
+    ...(paged ? [PagedDocument, DocPage, DocPageCommands] : []),
     StarterKit.configure({
-      document: false,
+      document: paged ? false : undefined,
       heading: { levels: [1, 2, 3, 4, 5, 6] },
     }),
     Underline,
@@ -97,13 +101,48 @@ export function getExtensions() {
     Subscript,
     Superscript,
     Link.configure({ openOnClick: false }),
-    Table.configure({ resizable: true }),
+    TableLayout.configure({
+      resizable: true,
+      handleWidth: 8,
+      cellMinWidth: 48,
+      lastColumnResizable: true,
+    }),
     TableRow,
+    // Drag handle: только table (см. nested.rules). Плавающие таблицы с обтеканием — отдельный эпик (page-reflow / DOCX).
+    DragHandle.configure({
+      render: () => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tiptap-table-drag-handle";
+        btn.setAttribute("aria-label", "Переместить таблицу");
+        btn.title = "Переместить таблицу";
+        return btn;
+      },
+      nested: {
+        defaultRules: false,
+        rules: [
+          {
+            id: "only-table-draggable",
+            evaluate: ({ node }) =>
+              node.type.name === "table" ? 0 : 1000,
+          },
+        ],
+        edgeDetection: "none",
+      },
+      computePositionConfig: {
+        placement: "top-start",
+        strategy: "absolute",
+      },
+    }),
     TableHeaderPreservingStyle,
     TableCellPreservingStyle,
     Image.configure({ inline: true, allowBase64: true }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    BlockId,
     Indent,
+    SearchHighlight,
+    ContinuityMarkers,
+    WarningMark,
   ];
 }

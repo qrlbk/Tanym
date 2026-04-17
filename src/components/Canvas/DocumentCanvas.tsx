@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useState } from "react";
-import { EditorContent } from "@tiptap/react";
+import { useRef, useCallback, useEffect, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { EditorContent, useEditorState } from "@tiptap/react";
 import { useEditorContext } from "@/components/Editor/EditorProvider";
 import { useUIStore } from "@/stores/uiStore";
 import { useDocumentStore } from "@/stores/documentStore";
+import { usePlotStoryStore, type PlotStoryState } from "@/stores/plotStoryStore";
 import EditorContextMenu from "./ContextMenu";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import {
@@ -13,61 +15,157 @@ import {
   PAGE_CHROME,
   CANVAS_STACK_PADDING_V_PX,
 } from "@/lib/page-layout";
-import { reflowDocPages, countDocPages, PAGE_REFLOW_META } from "@/lib/page-reflow";
+import { countDocPages, PAGE_REFLOW_META } from "@/lib/page-reflow";
+import { runPageLayout, isPaginationLayoutV2Enabled } from "@/lib/page-layout-engine";
+import {
+  bumpLayoutVersionHard,
+  bumpContextVersion,
+  buildPageRanges,
+  getLayoutVersion,
+  logReflowAction,
+  scheduleSoftLayoutVersionBump,
+} from "@/lib/layout";
+import { THEME } from "@/lib/theme/colors";
+
+const LAYOUT_DEBOUNCE_MS = 16;
+const MAX_REFLOW_PUMP_DEPTH = 60;
 
 export default function DocumentCanvas() {
   const editor = useEditorContext();
-  const zoom = useUIStore((s) => s.zoom);
-  const setZoom = useUIStore((s) => s.setZoom);
-  const orientation = useUIStore((s) => s.orientation);
-  const margins = useUIStore((s) => s.margins);
-  const showTextBoundaries = useUIStore((s) => s.showTextBoundaries);
+  const {
+    zoom,
+    orientation,
+    margins,
+    showTextBoundaries,
+    setCanvasViewportInnerWidth,
+    writerFocusMode,
+    canvasAppearance,
+  } = useUIStore(
+    useShallow((s) => ({
+      zoom: s.zoom,
+      orientation: s.orientation,
+      margins: s.margins,
+      showTextBoundaries: s.showTextBoundaries,
+      setCanvasViewportInnerWidth: s.setCanvasViewportInnerWidth,
+      writerFocusMode: s.writerFocusMode,
+      canvasAppearance: s.canvasAppearance,
+    })),
+  );
   const setPageCount = useDocumentStore((s) => s.setPageCount);
   const setCurrentPage = useDocumentStore((s) => s.setCurrentPage);
+  const setPageRanges = useDocumentStore((s) => s.setPageRanges);
+  const { consistencyWarnings, warningStatuses, chunkSceneMap } = usePlotStoryStore(
+    useShallow((s: PlotStoryState) => ({
+      consistencyWarnings: s.consistencyWarnings,
+      warningStatuses: s.warningStatuses,
+      chunkSceneMap: s.chunkSceneMap,
+    })),
+  );
 
   const editorOuterRef = useRef<HTMLDivElement>(null);
-  const [pageCount, setLocalPageCount] = useState(1);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  /** Doc is source of truth — React state lagged behind reflow and clipped lower pages (overflow:hidden). */
+  const docPageCountRaw = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => (ed ? countDocPages(ed.state.doc) : 1),
+  });
+  const docPageRangesRaw = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => (ed ? buildPageRanges(ed.state.doc) : []),
+  });
+  const docPageCount = docPageCountRaw ?? 1;
+  const docPageRanges = useMemo(() => docPageRangesRaw ?? [], [docPageRangesRaw]);
+  const editorRafOuterRef = useRef(0);
+  const editorRafInnerRef = useRef(0);
+  const layoutDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const layoutRafRef = useRef(0);
 
   useAutoSave(editor, 30000);
 
-  const geo = computePageGeometry(orientation, margins);
+  const geo = useMemo(
+    () => computePageGeometry(orientation, margins),
+    [orientation, margins],
+  );
   const scale = zoom / 100;
   const fullPageSlot = geo.pageHeightPx + PAGE_GAP_PX;
 
   const runReflow = useCallback(() => {
     if (!editor?.state.schema.nodes.docPage) return;
-    // #region agent log
-    fetch("http://127.0.0.1:7554/ingest/2f3d836c-06cf-4f5d-9694-189e6dcde093", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "cc8ee0",
-      },
-      body: JSON.stringify({
-        sessionId: "cc8ee0",
-        hypothesisId: "H5",
-        location: "DocumentCanvas.tsx:runReflow",
-        message: "runReflow invoked",
-        data: {
-          contentHeightPx: geo.contentHeightPx,
-          scale,
-          docPagesBefore: countDocPages(editor.state.doc),
-          textLen: editor.state.doc.textContent.length,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    const versionAtStart = getLayoutVersion();
+    logReflowAction("runReflow_start", {
+      versionAtStart,
+      contentHeightPx: geo.contentHeightPx,
+      scale,
+    });
+    let anyAgain = false;
     const pump = (depth: number) => {
-      if (depth > 200) return;
-      const again = reflowDocPages(editor, geo.contentHeightPx, scale);
-      const n = countDocPages(editor.state.doc);
-      setLocalPageCount(n);
-      setPageCount(n);
+      if (depth > MAX_REFLOW_PUMP_DEPTH) {
+        logReflowAction("runReflow_abort_max_depth", {
+          depth,
+          maxDepth: MAX_REFLOW_PUMP_DEPTH,
+          versionAtStart,
+        });
+        return;
+      }
+      if (versionAtStart !== getLayoutVersion()) {
+        logReflowAction("runReflow_abort_stale", {
+          depth,
+          versionAtStart,
+          actualVersion: getLayoutVersion(),
+        });
+        return;
+      }
+      const again = runPageLayout(editor, {
+        contentHeightPx: geo.contentHeightPx,
+        viewScale: scale,
+        expectedLayoutVersion: versionAtStart,
+      });
+      logReflowAction("runReflow_pump_iteration", {
+        depth,
+        again,
+        versionAtStart,
+      });
+      if (again) anyAgain = true;
       if (again) requestAnimationFrame(() => pump(depth + 1));
     };
     pump(0);
-  }, [editor, geo.contentHeightPx, scale, setPageCount]);
+    if (isPaginationLayoutV2Enabled() && anyAgain) {
+      requestAnimationFrame(() => {
+        if (versionAtStart !== getLayoutVersion()) return;
+        runPageLayout(editor, {
+          contentHeightPx: geo.contentHeightPx,
+          viewScale: scale,
+          expectedLayoutVersion: versionAtStart,
+        });
+      });
+    }
+  }, [editor, geo.contentHeightPx, scale]);
+
+  const scheduleReflowFromEditor = useCallback(() => {
+    if (layoutDebounceRef.current) {
+      clearTimeout(layoutDebounceRef.current);
+      layoutDebounceRef.current = null;
+    }
+    cancelAnimationFrame(layoutRafRef.current);
+    cancelAnimationFrame(editorRafOuterRef.current);
+    cancelAnimationFrame(editorRafInnerRef.current);
+    editorRafOuterRef.current = requestAnimationFrame(() => {
+      editorRafInnerRef.current = requestAnimationFrame(() => {
+        runReflow();
+      });
+    });
+  }, [runReflow]);
+
+  const scheduleReflowFromLayout = useCallback(() => {
+    cancelAnimationFrame(editorRafOuterRef.current);
+    cancelAnimationFrame(editorRafInnerRef.current);
+    if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+    layoutDebounceRef.current = setTimeout(() => {
+      layoutDebounceRef.current = null;
+      cancelAnimationFrame(layoutRafRef.current);
+      layoutRafRef.current = requestAnimationFrame(() => runReflow());
+    }, LAYOUT_DEBOUNCE_MS);
+  }, [runReflow]);
 
   useEffect(() => {
     if (!editor) return;
@@ -76,13 +174,18 @@ export default function DocumentCanvas() {
     const schedule = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        requestAnimationFrame(runReflow);
+        scheduleReflowFromEditor();
       });
     };
 
     const onUpdate = ({ transaction }: { transaction: { docChanged?: boolean; getMeta: (k: string) => unknown } }) => {
       if (!transaction.docChanged) return;
       if (transaction.getMeta(PAGE_REFLOW_META)) return;
+      logReflowAction("editor_doc_changed_schedule_reflow", {
+        currentLayoutVersion: getLayoutVersion(),
+      });
+      bumpContextVersion();
+      scheduleSoftLayoutVersionBump();
       schedule();
     };
 
@@ -91,41 +194,77 @@ export default function DocumentCanvas() {
 
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(editorRafOuterRef.current);
+      cancelAnimationFrame(editorRafInnerRef.current);
       editor.off("update", onUpdate);
     };
-  }, [editor, runReflow]);
+  }, [editor, runReflow, scheduleReflowFromEditor]);
 
   useEffect(() => {
-    if (!editorOuterRef.current) return;
-    const ro = new ResizeObserver(() => {
-      requestAnimationFrame(runReflow);
-    });
-    ro.observe(editorOuterRef.current);
-    return () => ro.disconnect();
-  }, [runReflow]);
+    // Hard layout invalidation: geometry / zoom changed.
+    bumpLayoutVersionHard();
+    scheduleReflowFromLayout();
+  }, [geo.contentHeightPx, geo.pageWidthPx, scale, scheduleReflowFromLayout]);
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        setZoom(zoom + (e.deltaY < 0 ? 5 : -5));
-      }
-    },
-    [zoom, setZoom],
-  );
+  useEffect(() => {
+    const root = editorOuterRef.current;
+    if (!root) return;
+    const observed = new WeakSet<Element>();
+    const ro = new ResizeObserver(() => scheduleReflowFromLayout());
+    ro.observe(root);
+    const observeBodies = () => {
+      root.querySelectorAll(".doc-page-body").forEach((el) => {
+        if (!observed.has(el)) {
+          observed.add(el);
+          ro.observe(el);
+        }
+      });
+    };
+    observeBodies();
+    const mo = new MutationObserver(observeBodies);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => {
+      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+      cancelAnimationFrame(layoutRafRef.current);
+      mo.disconnect();
+      ro.disconnect();
+    };
+  }, [scheduleReflowFromLayout]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.commands.refreshContinuityMarkers();
+  }, [editor, consistencyWarnings, warningStatuses, chunkSceneMap]);
+
+  useEffect(() => {
+    setPageCount(docPageCount);
+  }, [docPageCount, setPageCount]);
+
+  useEffect(() => {
+    setPageRanges(docPageRanges);
+  }, [docPageRanges, setPageRanges]);
+
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setCanvasViewportInnerWidth(el.clientWidth);
+    });
+    ro.observe(el);
+    setCanvasViewportInnerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, [setCanvasViewportInnerWidth]);
 
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const scrollTop = e.currentTarget.scrollTop;
+      const scrollEl = e.currentTarget;
+      const scrollTop = scrollEl.scrollTop;
       const pageH = fullPageSlot * scale;
-      const paddingTop = CANVAS_STACK_PADDING_V_PX * scale;
-      const current = Math.max(
-        1,
-        Math.floor((scrollTop - paddingTop + pageH / 2) / pageH) + 1,
-      );
-      setCurrentPage(Math.min(current, pageCount));
+      const canvasPad = CANVAS_STACK_PADDING_V_PX;
+      const current = Math.max(1, Math.floor((scrollTop - canvasPad + pageH / 2) / pageH) + 1);
+      setCurrentPage(Math.min(current, docPageCount));
     },
-    [fullPageSlot, scale, pageCount, setCurrentPage],
+    [docPageCount, fullPageSlot, scale, setCurrentPage],
   );
 
   const handleDrop = useCallback(
@@ -151,69 +290,102 @@ export default function DocumentCanvas() {
     e.preventDefault();
   }, []);
 
-  const workspaceBg = PAGE_CHROME.workspaceBackground;
-  const totalSlotHeight = pageCount * geo.pageHeightPx + Math.max(0, pageCount - 1) * PAGE_GAP_PX;
-  /** В Word лист имеет фиксированный размер (A4); масштаб только уменьшает/увеличивает вид, не ширину окна. */
+  const workspaceBgLight =
+    writerFocusMode === "draft"
+      ? THEME.canvas.workspaceLight
+      : writerFocusMode === "rewrite"
+        ? THEME.canvas.workspaceLightWarm
+        : "#d0ccc4";
+  const workspaceBg =
+    canvasAppearance === "dark"
+      ? THEME.canvas.workspaceDark
+      : workspaceBgLight;
+
+  /** Shell `body` uses light-on-dark text; override here so the sheet inherits dark ink on light parchment. */
+  const docForeground =
+    canvasAppearance === "light"
+      ? THEME.text.onSheetLight
+      : THEME.text.onSheetDark;
+  const docCaret =
+    canvasAppearance === "light" ? "#111827" : THEME.text.onSheetDark;
+  const totalSlotHeight =
+    docPageCount * geo.pageHeightPx + Math.max(0, docPageCount - 1) * PAGE_GAP_PX;
+  /** Лист фиксированного размера (A4); масштаб только меняет вид, не физическую ширину страницы. */
   const scaledPageW = Math.ceil(geo.pageWidthPx * scale);
-  const scaledStackH = Math.ceil(totalSlotHeight * scale);
+  /** +2px запас: transform: scale + ceil даёт иногда срез верхней/нижней строки у края клипа. */
+  const scaledStackH = Math.ceil(totalSlotHeight * scale) + 2;
 
   return (
     <EditorContextMenu>
-      <div
-        className="flex-1 overflow-auto relative print-area scroll-smooth overscroll-y-contain"
-        style={{
-          background: workspaceBg,
-          scrollPaddingBottom: `${CANVAS_STACK_PADDING_V_PX}px`,
-        } as React.CSSProperties}
-        onWheel={handleWheel}
-        onScroll={handleScroll}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-      >
+      <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
         <div
-          className="mx-auto flex shrink-0 flex-col"
-          style={{
-            width: scaledPageW,
-            minWidth: scaledPageW,
-            maxWidth: scaledPageW,
-            paddingTop: CANVAS_STACK_PADDING_V_PX,
-            paddingBottom: CANVAS_STACK_PADDING_V_PX,
-          }}
+          ref={scrollAreaRef}
+          data-canvas-appearance={canvasAppearance}
+          className="flex-1 min-h-0 min-w-0 overflow-auto relative print-area overscroll-y-contain"
+          style={
+            {
+              background: workspaceBg,
+              /** Без smooth: иначе колесо/трекпад дают «долгий спуск», как удерживаемая клавиша. */
+              scrollBehavior: "auto",
+              scrollPaddingBottom: `${CANVAS_STACK_PADDING_V_PX}px`,
+              color: docForeground,
+              caretColor: docCaret,
+            } as React.CSSProperties
+          }
+          onScroll={handleScroll}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
         >
-          {/*
-            Обрезаем по размеру листа после scale(top left), иначе разметка остаётся 793px и растягивает скролл
-            (как в Word: видимая ширина = физическая ширина страницы × зум).
-          */}
           <div
+            className="mx-auto flex shrink-0 flex-col"
             style={{
               width: scaledPageW,
-              height: scaledStackH,
-              overflow: "hidden",
-              position: "relative",
+              minWidth: scaledPageW,
+              maxWidth: scaledPageW,
+              paddingTop: CANVAS_STACK_PADDING_V_PX,
+              paddingBottom: CANVAS_STACK_PADDING_V_PX,
             }}
           >
+            {/*
+              Обрезаем по размеру листа после scale(top left), иначе разметка остаётся 793px и растягивает скролл
+              (видимая ширина = физическая ширина страницы × масштаб).
+            */}
             <div
-              ref={editorOuterRef}
-              data-show-text-boundaries={showTextBoundaries ? "true" : undefined}
               style={{
-                width: geo.pageWidthPx,
+                width: scaledPageW,
+                height: scaledStackH,
+                overflow: "hidden",
                 position: "relative",
-                minHeight: totalSlotHeight,
-                transform: `scale(${scale})`,
-                transformOrigin: "top left",
-                "--doc-page-width-px": `${geo.pageWidthPx}px`,
-                "--doc-page-height-px": `${geo.pageHeightPx}px`,
-                "--doc-page-gap-px": `${PAGE_GAP_PX}px`,
-                "--doc-sheet-shadow": PAGE_CHROME.sheetShadow,
-                "--doc-margin-top": `${geo.marginTopPx}px`,
-                "--doc-margin-right": `${geo.marginRightPx}px`,
-                "--doc-margin-bottom": `${geo.marginBottomPx}px`,
-                "--doc-margin-left": `${geo.marginLeftPx}px`,
-                "--doc-content-height": `${geo.contentHeightPx}px`,
-              } as React.CSSProperties}
+              }}
             >
-              <div className="relative z-[1]">
-                {editor && <EditorContent editor={editor} />}
+              <div
+                ref={editorOuterRef}
+                data-canvas-appearance={canvasAppearance}
+                data-show-text-boundaries={showTextBoundaries ? "true" : undefined}
+                style={{
+                  width: geo.pageWidthPx,
+                  position: "relative",
+                  minHeight: totalSlotHeight,
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                  "--doc-page-width-px": `${geo.pageWidthPx}px`,
+                  "--doc-page-height-px": `${geo.pageHeightPx}px`,
+                  "--doc-page-gap-px": `${PAGE_GAP_PX}px`,
+                  "--doc-sheet-shadow": PAGE_CHROME.sheetShadow,
+                  "--doc-margin-top": `${geo.marginTopPx}px`,
+                  "--doc-margin-right": `${geo.marginRightPx}px`,
+                  "--doc-margin-bottom": `${geo.marginBottomPx}px`,
+                  "--doc-margin-left": `${geo.marginLeftPx}px`,
+                  "--doc-content-height": `${geo.contentHeightPx}px`,
+                  "--doc-foreground": docForeground,
+                  "--doc-caret": docCaret,
+                  color: docForeground,
+                  caretColor: docCaret,
+                } as React.CSSProperties}
+              >
+                <div className="relative z-[1]">
+                  {editor && <EditorContent editor={editor} />}
+                </div>
               </div>
             </div>
           </div>

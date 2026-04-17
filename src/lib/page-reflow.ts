@@ -1,20 +1,33 @@
 import type { Editor } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import {
+  REFLOW_VIEWPORT_EPS_PX,
+  contentAreaBottomScreen,
+  effectiveContentH,
+  pageBodyOverflows,
+} from "./page-layout-engine/layout-metrics";
+import {
+  getLayoutVersion,
+  logReflowAction,
+  measurePageBlocks,
+  paginatePageBlocks,
+} from "./layout";
+
+export { REFLOW_VIEWPORT_EPS_PX } from "./page-layout-engine/layout-metrics";
 
 export const PAGE_REFLOW_META = "pageReflow";
 
 type PageInfo = { pos: number; node: PMNode };
 
-/** Map through pending steps with backward assoc; clamp to valid doc insert range (avoids RangeError). */
-function mapInsertPos(tr: Transaction, pos: number): number {
-  const m = tr.mapping.map(pos, -1);
+function mapInsertPosForward(tr: Transaction, pos: number): number {
+  const m = tr.mapping.map(pos, 1);
   return Math.max(0, Math.min(m, tr.doc.content.size));
 }
 
 function collectDocPages(doc: PMNode): PageInfo[] {
   const pages: PageInfo[] = [];
-  let pos = 1;
+  let pos = 0;
   for (let i = 0; i < doc.childCount; i++) {
     const child = doc.child(i);
     if (child.type.name === "docPage") {
@@ -36,75 +49,6 @@ function resolvePageBody(dom: HTMLElement): HTMLElement | null {
   if (inner) return inner;
   /** nodeDOM(pagePos) часто указывает на блок внутри листа (p, h1…), а не на sheet. */
   return dom.closest(".doc-page-body") as HTMLElement | null;
-}
-
-/**
- * Effective content-area height from the live DOM, clamped to the geometry value.
- * Guards against cases where body.clientHeight differs from the layout-computed
- * pageHeightPx (e.g. CSS variable not yet resolved, or flex not fully laid out).
- */
-function effectiveContentH(body: HTMLElement, geometryH: number): number {
-  const cs = getComputedStyle(body);
-  const pt = parseFloat(cs.paddingTop) || 0;
-  const pb = parseFloat(cs.paddingBottom) || 0;
-  const domH = body.clientHeight - pt - pb;
-  return domH > 0 ? Math.min(geometryH, domH) : geometryH;
-}
-
-/**
- * Нижний край области набора (текст) в координатах viewport.
- * Задаём низ явно: верх body + (верхнее поле + высота области текста) × зум.
- */
-function contentAreaBottomScreen(
-  body: HTMLElement,
-  contentHeightPx: number,
-  scale: number,
-): number {
-  const s = scale > 0 ? scale : 1;
-  const br = body.getBoundingClientRect();
-  const pt = parseFloat(getComputedStyle(body).paddingTop) || 0;
-  return br.top + (pt + contentHeightPx) * s;
-}
-
-function pageBodyOverflows(
-  body: HTMLElement,
-  contentH: number,
-  scale: number,
-): boolean {
-  const children = body.children;
-  if (!children.length) return false;
-  const s = scale > 0 ? scale : 1;
-  const limit = contentAreaBottomScreen(body, contentH, scale);
-  let maxBottom = 0;
-  for (let i = 0; i < children.length; i++) {
-    const b = (children[i] as HTMLElement).getBoundingClientRect().bottom;
-    if (b > maxBottom) maxBottom = b;
-  }
-  return maxBottom > limit + 2 * s;
-}
-
-/**
- * How many direct children of body fit within the content area?
- * Returns at least 1 (never leave a page completely empty).
- */
-function findFitBlockCount(
-  body: HTMLElement,
-  contentH: number,
-  scale: number,
-): number {
-  const children = Array.from(body.children) as HTMLElement[];
-  if (children.length <= 1) return children.length;
-  const s = scale > 0 ? scale : 1;
-  const limitScreen = contentAreaBottomScreen(body, contentH, scale);
-  let fit = 0;
-  for (const child of children) {
-    if (child.getBoundingClientRect().bottom <= limitScreen + 2 * s) {
-      fit++;
-    } else {
-      break;
-    }
-  }
-  return Math.max(1, fit);
 }
 
 function childNodesArray(node: PMNode): PMNode[] {
@@ -219,40 +163,62 @@ function moveExcessBlocksToNextPage(
   pageIndex: number,
   keepCount: number,
 ): Transaction | null {
-  const { pos, node } = pages[pageIndex];
+  const page = pages[pageIndex];
+  if (!page) return null;
+  const { node } = page;
   const cc = node.childCount;
   if (keepCount >= cc) return null;
   if (keepCount < 1) keepCount = 1;
 
-  const innerStart = pos + 1;
-  let fromPos = innerStart;
-  for (let j = 0; j < keepCount; j++) {
-    fromPos += node.child(j).nodeSize;
-  }
-  let toPos = innerStart;
-  for (let j = 0; j < cc; j++) {
-    toPos += node.child(j).nodeSize;
-  }
-
+  const keptNodes: PMNode[] = [];
   const movedNodes: PMNode[] = [];
-  for (let j = keepCount; j < cc; j++) {
-    movedNodes.push(node.child(j));
+  for (let j = 0; j < cc; j++) {
+    const child = node.child(j);
+    if (j < keepCount) keptNodes.push(child);
+    else movedNodes.push(child);
   }
+  if (!movedNodes.length) return null;
 
-  let tr = state.tr.delete(fromPos, toPos);
+  const currentPageUpdated = node.type.create(node.attrs, keptNodes, node.marks);
+  const topChildren: PMNode[] = [];
+  for (let i = 0; i < state.doc.childCount; i++) topChildren.push(state.doc.child(i));
 
-  if (pageIndex + 1 < pages.length) {
-    const nextPos = pages[pageIndex + 1]!.pos;
-    const atNext = mapInsertPos(tr, nextPos);
-    const inner = Math.min(atNext + 1, tr.doc.content.size);
-    tr = tr.insert(inner, movedNodes);
+  // Resolve top-level child index for current docPage.
+  let currentDocPageOrdinal = 0;
+  let currentTopIndex = -1;
+  for (let i = 0; i < topChildren.length; i++) {
+    if (topChildren[i]!.type.name !== "docPage") continue;
+    if (currentDocPageOrdinal === pageIndex) {
+      currentTopIndex = i;
+      break;
+    }
+    currentDocPageOrdinal += 1;
+  }
+  if (currentTopIndex < 0) return null;
+  topChildren[currentTopIndex] = currentPageUpdated;
+
+  // Find next docPage in top-level order.
+  let nextTopIndex = -1;
+  for (let i = currentTopIndex + 1; i < topChildren.length; i++) {
+    if (topChildren[i]!.type.name === "docPage") {
+      nextTopIndex = i;
+      break;
+    }
+  }
+  if (nextTopIndex >= 0) {
+    const nextPageNode = topChildren[nextTopIndex]!;
+    const nextUpdated = nextPageNode.type.create(
+      nextPageNode.attrs,
+      [...movedNodes, ...childNodesArray(nextPageNode)],
+      nextPageNode.marks,
+    );
+    topChildren[nextTopIndex] = nextUpdated;
   } else {
-    const docPage = state.schema.nodes.docPage;
-    const afterPage = pos + node.nodeSize;
-    const mapped = mapInsertPos(tr, afterPage);
-    const newPg = docPage.create(null, movedNodes);
-    tr = tr.insert(mapped, newPg);
+    const newPage = state.schema.nodes.docPage.create(null, movedNodes);
+    topChildren.splice(currentTopIndex + 1, 0, newPage);
   }
+
+  const tr = state.tr.replaceWith(0, state.doc.content.size, topChildren);
 
   tr.setMeta(PAGE_REFLOW_META, true);
   return tr;
@@ -281,7 +247,6 @@ function findOverflowingTableChildIndex(
   scale: number,
 ): number {
   const limit = contentAreaBottomScreen(body, contentH, scale);
-  const s = scale > 0 ? scale : 1;
   for (let i = pageNode.childCount - 1; i >= 0; i--) {
     if (pageNode.child(i).type.name !== "table") continue;
     const wrap = body.children[i];
@@ -290,7 +255,7 @@ function findOverflowingTableChildIndex(
       wrap.matches("table") ? wrap : wrap.querySelector("table")
     ) as HTMLTableElement | null;
     if (!tableEl) continue;
-    if (tableEl.getBoundingClientRect().bottom > limit + 2 * s) return i;
+    if (tableEl.getBoundingClientRect().bottom > limit + REFLOW_VIEWPORT_EPS_PX) return i;
   }
   return -1;
 }
@@ -304,16 +269,15 @@ function insertIntoNextPageOrCreate(
 ): Transaction {
   if (pageIndex + 1 < pages.length) {
     const nextPos = pages[pageIndex + 1]!.pos;
-    const atNext = mapInsertPos(tr, nextPos);
-    const inner = Math.min(atNext + 1, tr.doc.content.size);
-    return tr.insert(inner, content);
+    const nextInner = mapInsertPosForward(tr, nextPos + 1);
+    return tr.insert(nextInner, content);
   }
 
   const docPage = state.schema.nodes.docPage;
   const currentPagePos = pages[pageIndex]!.pos;
   const currentPageNode = pages[pageIndex]!.node;
   const afterPage = currentPagePos + currentPageNode.nodeSize;
-  const mappedAfter = mapInsertPos(tr, afterPage);
+  const mappedAfter = mapInsertPosForward(tr, afterPage);
   const newPage = docPage.create(null, content);
   return tr.insert(mappedAfter, newPage);
 }
@@ -356,12 +320,11 @@ function splitOnlyParagraphOverflow(
 
   if (pageIndex + 1 < pages.length) {
     const nextPos = pages[pageIndex + 1]!.pos;
-    const atNext = mapInsertPos(tr, nextPos);
-    const inner = Math.min(atNext + 1, tr.doc.content.size);
-    tr = tr.insert(inner, p2);
+    const nextInner = mapInsertPosForward(tr, nextPos + 1);
+    tr = tr.insert(nextInner, p2);
   } else {
     const afterPage = pos + node.nodeSize;
-    const mappedEnd = mapInsertPos(tr, afterPage);
+    const mappedEnd = mapInsertPosForward(tr, afterPage);
     const docPage = schema.nodes.docPage;
     const newPg = docPage.create(null, [p2]);
     tr = tr.insert(mappedEnd, newPg);
@@ -392,7 +355,7 @@ function splitListInCellByLayout(
   let fit = 0;
   for (let i = 0; i < lis.length; i++) {
     const liBottom = lis[i]!.getBoundingClientRect().bottom - cellTopScreen;
-    if (liBottom <= maxBottomFromCellTop + 2) fit++;
+    if (liBottom <= maxBottomFromCellTop + REFLOW_VIEWPORT_EPS_PX) fit++;
     else break;
   }
 
@@ -426,7 +389,7 @@ function splitListInCellByLayout(
     const split = splitParagraphNodeByWords(
       paraNode,
       pEl,
-      (remaining - 2 * s) / s,
+      (remaining - REFLOW_VIEWPORT_EPS_PX) / s,
       width,
     );
     if (!split) return null;
@@ -499,16 +462,15 @@ function splitTableCellContent(
   let fitCount = 0;
   for (const el of childEls) {
     const bottom = el.getBoundingClientRect().bottom - cellTop;
-    if (bottom <= availableHeight + 2) {
+    if (bottom <= availableHeight + REFLOW_VIEWPORT_EPS_PX) {
       fitCount += 1;
     } else {
       break;
     }
   }
 
-  const sGeom = scale > 0 ? scale : 1;
   const cellBottomScreen = cellEl.getBoundingClientRect().bottom;
-  if (cellBottomScreen <= pageBottomScreen + 2 * sGeom) {
+  if (cellBottomScreen <= pageBottomScreen + REFLOW_VIEWPORT_EPS_PX) {
     const empty = schema.nodes.paragraph.create();
     return {
       top: cellNode.type.create(cellNode.attrs, childNodes, cellNode.marks),
@@ -534,7 +496,7 @@ function splitTableCellContent(
       const split = splitParagraphNodeByWords(
         overflowNode,
         overflowEl,
-        (remaining - 2 * s) / s,
+        (remaining - REFLOW_VIEWPORT_EPS_PX) / s,
         width,
       );
       if (split) {
@@ -631,7 +593,7 @@ function splitTableCellContent(
       const split = splitParagraphNodeByWords(
         n0,
         el0,
-        (remaining - 2 * sc) / sc,
+        (remaining - REFLOW_VIEWPORT_EPS_PX) / sc,
         width,
       );
       if (split) {
@@ -719,7 +681,7 @@ function splitTableOverflow(
   let fitCount = 0;
   for (const row of rows) {
     const rowBottom = row.getBoundingClientRect().bottom;
-    if (rowBottom <= contentBottomScreen + 2 * s) {
+    if (rowBottom <= contentBottomScreen + REFLOW_VIEWPORT_EPS_PX) {
       fitCount += 1;
     } else {
       break;
@@ -784,45 +746,15 @@ function splitTableOverflow(
    * Строковый сплит иногда даёт нижнюю «полосу» без текста (все ячейки пустые в PM),
    * хотя визуально строка переполнена — тогда переносим целые строки с индекса fitCount.
    */
-  let fallbackWholeRows = false;
   const bottomPlain = bottomRows.map((r) => r.textContent).join("").trim();
   if (bottomRows.length > 0 && bottomPlain.length === 0 && fitCount > 0) {
     topRows = rowNodes.slice(0, fitCount);
     bottomRows = rowNodes.slice(fitCount);
-    fallbackWholeRows = true;
   }
 
   if (!topRows.length || !bottomRows.length) {
     return null;
   }
-
-  // #region agent log
-  {
-    const bottomTxt = bottomRows.map((r) => r.textContent).join("");
-    fetch("http://127.0.0.1:7554/ingest/2f3d836c-06cf-4f5d-9694-189e6dcde093", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "cc8ee0",
-      },
-      body: JSON.stringify({
-        sessionId: "cc8ee0",
-        hypothesisId: "D",
-        location: "page-reflow.ts:splitTableOverflow:out",
-        message: "table split outcome",
-        data: {
-          fitCount,
-          topRowsLen: topRows.length,
-          bottomRowsLen: bottomRows.length,
-          bottomTextLen: bottomTxt.length,
-          bottomPreview: bottomTxt.slice(0, 120),
-          fallbackWholeRows,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   bottomRows = withRepeatedTableHeader(rowNodes, bottomRows, fitCount);
 
@@ -856,7 +788,7 @@ function moveSingleBlockToNextPage(
   const pageEndBefore = pos + node.nodeSize;
 
   let tr = state.tr.replaceWith(innerStart, innerEnd, emptyP);
-  const mappedPageEnd = mapInsertPos(tr, pageEndBefore);
+  const mappedPageEnd = mapInsertPosForward(tr, pageEndBefore);
   const blockCopy = block.copy(block.content);
   const newPg = schema.nodes.docPage.create(null, [blockCopy]);
   tr = tr.insert(mappedPageEnd, newPg);
@@ -874,9 +806,20 @@ export function reflowDocPages(
   editor: Editor,
   contentHeightPx: number,
   viewScale = 1,
+  expectedLayoutVersion?: number,
 ): boolean {
   const view = editor.view;
   if (!view) return false;
+  if (
+    typeof expectedLayoutVersion === "number" &&
+    expectedLayoutVersion !== getLayoutVersion()
+  ) {
+    logReflowAction("skip_stale_before_start", {
+      expectedLayoutVersion,
+      actualLayoutVersion: getLayoutVersion(),
+    });
+    return false;
+  }
 
   const state = view.state;
   if (!state.schema.nodes.docPage) return false;
@@ -897,98 +840,118 @@ export function reflowDocPages(
       const ch = effectiveContentH(body, contentHeightPx);
       if (!pageBodyOverflows(body, ch, viewScale)) continue;
 
+      logReflowAction("page_overflow_detected", {
+        pageIndex: pi,
+        pagePos: pos,
+        childCount: node.childCount,
+        contentHeight: ch,
+        scale: viewScale,
+      });
+
       const tblIdx = findOverflowingTableChildIndex(node, body, ch, viewScale);
-      // #region agent log
-      fetch("http://127.0.0.1:7554/ingest/2f3d836c-06cf-4f5d-9694-189e6dcde093", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "cc8ee0",
-        },
-        body: JSON.stringify({
-          sessionId: "cc8ee0",
-          hypothesisId: "A",
-          location: "page-reflow.ts:reflow:tblScan",
-          message: "overflow page table index",
-          data: {
-            pi,
-            tblIdx,
-            pmChildCount: node.childCount,
-            domBodyKids: body.children.length,
-            childTypes: Array.from({ length: Math.min(6, node.childCount) }, (_, i) =>
-              node.child(i).type.name,
-            ),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       if (tblIdx >= 0) {
+        logReflowAction("table_overflow_detected", {
+          pageIndex: pi,
+          tableChildIndex: tblIdx,
+        });
         tr = splitTableOverflow(state, pages, pi, body, ch, viewScale, tblIdx);
-        // #region agent log
-        fetch("http://127.0.0.1:7554/ingest/2f3d836c-06cf-4f5d-9694-189e6dcde093", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "cc8ee0",
-          },
-          body: JSON.stringify({
-            sessionId: "cc8ee0",
-            hypothesisId: "B",
-            location: "page-reflow.ts:reflow:afterSplitTable",
-            message: "splitTableOverflow result",
-            data: { pi, tblIdx, splitOk: !!tr },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        if (tr) break;
+        if (tr) {
+          logReflowAction("table_split_applied", {
+            pageIndex: pi,
+            tableChildIndex: tblIdx,
+          });
+          break;
+        }
         if (node.childCount === 1) {
+          logReflowAction("fallback_single_block_move_after_table_split_fail", {
+            pageIndex: pi,
+          });
           tr = moveSingleBlockToNextPage(state, pages, pi);
           if (tr) break;
         }
       }
 
       if (node.childCount > 1) {
-        const keep = findFitBlockCount(body, ch, viewScale);
+        const measured = measurePageBlocks({
+          doc: state.doc,
+          pageNode: node,
+          pagePos: pos,
+          bodyEl: body,
+          zoom: viewScale,
+          preferredChildIndex: 0,
+        });
+        const keep = paginatePageBlocks(
+          measured.map((m) => ({
+            blockId: m.blockId,
+            height: m.height,
+            complexLayout: m.complexLayout,
+          })),
+          Math.round(ch),
+        ).fitCount;
+        logReflowAction("pagination_fit_count", {
+          pageIndex: pi,
+          totalBlocks: node.childCount,
+          keepCount: keep,
+          measuredBlocks: measured.length,
+        });
         if (keep < node.childCount) {
           tr = moveExcessBlocksToNextPage(state, pages, pi, keep);
-          if (tr) break;
+          if (tr) {
+            logReflowAction("move_excess_blocks", {
+              pageIndex: pi,
+              keepCount: keep,
+              movedCount: node.childCount - keep,
+            });
+            break;
+          }
+          /** Первый перенос не удался — пробуем оставить один блок (не вызываем при keep === childCount). */
+          tr = moveExcessBlocksToNextPage(state, pages, pi, node.childCount - 1);
+          if (tr) {
+            logReflowAction("move_excess_blocks_fallback_keep_last", {
+              pageIndex: pi,
+              keepCount: node.childCount - 1,
+            });
+            break;
+          }
         }
-        tr = moveExcessBlocksToNextPage(state, pages, pi, node.childCount - 1);
         break;
       }
 
       if (node.childCount === 1 && node.child(0).type.name === "paragraph") {
         tr = splitOnlyParagraphOverflow(state, pages, pi, body, ch);
-        if (tr) break;
+        if (tr) {
+          logReflowAction("split_single_paragraph", {
+            pageIndex: pi,
+          });
+          break;
+        }
       }
 
       if (node.childCount === 1) {
+        logReflowAction("move_single_block", {
+          pageIndex: pi,
+          nodeType: node.child(0).type.name,
+        });
         tr = moveSingleBlockToNextPage(state, pages, pi);
       }
       break;
     }
 
   if (!tr) return false;
+  if (
+    typeof expectedLayoutVersion === "number" &&
+    expectedLayoutVersion !== getLayoutVersion()
+  ) {
+    logReflowAction("skip_stale_before_dispatch", {
+      expectedLayoutVersion,
+      actualLayoutVersion: getLayoutVersion(),
+    });
+    return false;
+  }
 
-  // #region agent log
-  fetch("http://127.0.0.1:7554/ingest/2f3d836c-06cf-4f5d-9694-189e6dcde093", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "cc8ee0",
-    },
-    body: JSON.stringify({
-      sessionId: "cc8ee0",
-      hypothesisId: "C",
-      location: "page-reflow.ts:reflow:dispatch",
-      message: "dispatch reflow transaction",
-      data: { steps: tr.steps.length },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
+  logReflowAction("dispatch_reflow_transaction", {
+    stepCount: tr.steps.length,
+  });
   view.dispatch(tr);
   return true;
 }

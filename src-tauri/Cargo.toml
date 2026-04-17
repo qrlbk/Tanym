@@ -1,10 +1,10 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "Tanym — редактор для авторов (Next.js + Tauri)"
+authors = ["Tanym"]
+license = "Apache-2.0"
+repository = "https://github.com/qrlbk/Tanym"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -26,3 +26,6 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 font-kit = "0.14"
+# Roadmap фаза 6: health-check локального Ollama (check_ollama_ready).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", features = ["time"] }

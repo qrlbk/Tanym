@@ -1,29 +1,45 @@
 "use client";
 
-import { Clipboard } from "lucide-react";
+import { Clipboard, Undo2, Redo2 } from "lucide-react";
 import { useEditorContext } from "@/components/Editor/EditorProvider";
 import FontGroup from "@/components/Toolbar/FontGroup";
 import ParagraphGroup from "@/components/Toolbar/ParagraphGroup";
-import StylesGallery from "@/components/Toolbar/StylesGallery";
+import StylesDropdown from "@/components/Toolbar/StylesDropdown";
+import { UI_COLORS } from "@/lib/theme/colors";
+import { RibbonIsland } from "@/components/Ribbon/RibbonIsland";
 
-function SectionWrapper({
-  label,
+function IconIslandBtn({
+  onClick,
+  disabled,
+  title,
   children,
-  className = "",
 }: {
-  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  title: string;
   children: React.ReactNode;
-  className?: string;
 }) {
   return (
-    <div className={`flex flex-col h-full border-r border-gray-200 ${className}`}>
-      <div className="flex-1 flex items-center px-1">
-        {children}
-      </div>
-      <div className="text-[9px] text-gray-400 text-center pb-0.5 select-none">
-        {label}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border transition-colors disabled:cursor-not-allowed disabled:opacity-35"
+      style={{
+        borderColor: "transparent",
+        background: "transparent",
+        color: UI_COLORS.shellText,
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = UI_COLORS.ribbon.controlHover;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -39,29 +55,42 @@ export default function HomeTab() {
   };
 
   return (
-    <div className="flex items-stretch h-full px-1">
-      <SectionWrapper label="Буфер обмена">
-        <button
-          onClick={handlePaste}
-          className="flex flex-col items-center gap-0.5 px-2 py-1 rounded hover:bg-gray-100"
-          title="Вставить"
+    <div
+      className="flex min-h-0 min-w-0 flex-wrap items-stretch gap-2.5 py-1.5 pl-0.5 pr-1 font-sans"
+      style={{ color: UI_COLORS.shellText, fontFamily: "Inter, system-ui, sans-serif" }}
+    >
+      <RibbonIsland aria-label="Буфер обмена">
+        <IconIslandBtn title="Вставить" onClick={handlePaste} disabled={!editor}>
+          <Clipboard size={18} />
+        </IconIslandBtn>
+        <div className="h-6 w-px shrink-0" style={{ background: UI_COLORS.ribbon.separator }} />
+        <IconIslandBtn
+          title="Отменить"
+          disabled={!editor || !editor.can().undo()}
+          onClick={() => editor?.chain().focus().undo().run()}
         >
-          <Clipboard size={22} className="text-gray-600" />
-          <span className="text-[9px] text-gray-600">Вставить</span>
-        </button>
-      </SectionWrapper>
+          <Undo2 size={17} />
+        </IconIslandBtn>
+        <IconIslandBtn
+          title="Повторить"
+          disabled={!editor || !editor.can().redo()}
+          onClick={() => editor?.chain().focus().redo().run()}
+        >
+          <Redo2 size={17} />
+        </IconIslandBtn>
+      </RibbonIsland>
 
-      <SectionWrapper label="Шрифт" className="min-w-[160px]">
+      <RibbonIsland aria-label="Текст">
         <FontGroup />
-      </SectionWrapper>
+      </RibbonIsland>
 
-      <SectionWrapper label="Абзац">
-        <ParagraphGroup />
-      </SectionWrapper>
+      <RibbonIsland aria-label="Абзац">
+        <ParagraphGroup compact />
+      </RibbonIsland>
 
-      <SectionWrapper label="Стили" className="flex-1 min-w-0 border-r-0">
-        <StylesGallery />
-      </SectionWrapper>
+      <RibbonIsland aria-label="Стили">
+        <StylesDropdown />
+      </RibbonIsland>
     </div>
   );
 }

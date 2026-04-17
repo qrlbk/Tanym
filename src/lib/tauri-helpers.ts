@@ -11,7 +11,7 @@ export async function tauriSaveDialog(
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
       defaultPath: defaultName,
-      filters: [{ name: "Word Document", extensions: ["docx"] }],
+      filters: [{ name: "Документы DOCX", extensions: ["docx"] }],
     });
     return path;
   } catch {
@@ -24,7 +24,7 @@ export async function tauriOpenDialog(): Promise<string | null> {
   try {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const path = await open({
-      filters: [{ name: "Word Document", extensions: ["docx", "doc"] }],
+      filters: [{ name: "Документы DOCX", extensions: ["docx", "doc"] }],
       multiple: false,
     });
     return path as string | null;

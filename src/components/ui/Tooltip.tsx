@@ -11,7 +11,7 @@ export function TooltipProvider({ children }: { children: React.ReactNode }) {
 }
 
 const contentClass =
-  "z-[200] max-w-[min(280px,calc(100vw-16px))] rounded-md border border-gray-700/80 bg-gray-900 px-2.5 py-1.5 text-[11px] leading-snug text-gray-100 shadow-lg";
+  "z-[10070] max-w-[min(280px,calc(100vw-16px))] rounded-md border border-gray-700/80 bg-gray-900 px-2.5 py-1.5 text-[11px] leading-snug text-gray-100 shadow-lg";
 
 export function Tooltip({
   children,

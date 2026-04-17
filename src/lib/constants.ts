@@ -1,3 +1,19 @@
+/** Единый диапазон масштаба для ленты, строки состояния и колёсика мыши. */
+export const ZOOM_MIN = 50;
+export const ZOOM_MAX = 300;
+export const ZOOM_WHEEL_STEP = 5;
+export const ZOOM_BUTTON_STEP = 10;
+
+export const ZOOM_PRESETS: { label: string; value: number }[] = [
+  { label: "50%", value: 50 },
+  { label: "75%", value: 75 },
+  { label: "100%", value: 100 },
+  { label: "125%", value: 125 },
+  { label: "150%", value: 150 },
+  { label: "200%", value: 200 },
+  { label: "300%", value: 300 },
+];
+
 export const PAGE_WIDTH_CM = 21;
 export const PAGE_HEIGHT_CM = 29.7;
 

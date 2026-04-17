@@ -1,10 +1,24 @@
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table as DocxTable, TableRow as DocxTableRow, TableCell as DocxTableCell, WidthType, AlignmentType, ExternalHyperlink } from "docx";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  Table as DocxTable,
+  TableRow as DocxTableRow,
+  TableCell as DocxTableCell,
+  WidthType,
+  AlignmentType,
+  ExternalHyperlink,
+  BorderStyle,
+} from "docx";
 import { saveAs } from "file-saver";
 import mammoth from "mammoth";
 import type { Editor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/react";
 import { flattenDocPagesForExport, migrateDocJson } from "@/lib/migrate-doc-pages";
 import { isTauri, tauriSaveDialog, tauriWriteFile } from "./tauri-helpers";
+import type { StoryProject } from "@/lib/project/types";
 
 function getAlignmentType(align?: string): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined {
   switch (align) {
@@ -98,6 +112,96 @@ function processInlineContent(content?: JSONContent[]): (TextRun | ExternalHyper
   return runs.length > 0 ? runs : [new TextRun("")];
 }
 
+function cellBlocksToParagraphs(blocks: JSONContent[] | undefined): Paragraph[] {
+  if (!blocks?.length) return [new Paragraph("")];
+  const out: Paragraph[] = [];
+  for (const block of blocks) {
+    if (block.type === "paragraph") {
+      out.push(
+        new Paragraph({
+          children: processInlineContent(block.content),
+          alignment: getAlignmentType(block.attrs?.textAlign as string | undefined),
+        }),
+      );
+    } else if (block.type === "heading") {
+      const level = block.attrs?.level || 1;
+      out.push(
+        new Paragraph({
+          heading: getHeadingLevel(level),
+          children: processInlineContent(block.content),
+          alignment: getAlignmentType(block.attrs?.textAlign as string | undefined),
+        }),
+      );
+    } else {
+      out.push(new Paragraph(""));
+    }
+  }
+  return out.length > 0 ? out : [new Paragraph("")];
+}
+
+function cellJsonToDocxCell(cell: JSONContent): DocxTableCell {
+  const attrs = cell.attrs ?? {};
+  const colspan = Math.max(1, Number(attrs.colspan) || 1);
+  const rowspan = Math.max(1, Number(attrs.rowspan) || 1);
+  const borderMode = attrs.borderMode as string | undefined;
+  const cellBackground = attrs.cellBackground as string | undefined;
+
+  const paras = cellBlocksToParagraphs(cell.content);
+
+  const shading =
+    cellBackground &&
+    typeof cellBackground === "string" &&
+    cellBackground.startsWith("#")
+      ? { fill: hexToDocxColor(cellBackground) }
+      : undefined;
+
+  const nilSide = {
+    style: BorderStyle.NIL,
+    size: 0,
+    color: "FFFFFF",
+  };
+  const borders =
+    borderMode === "none"
+      ? {
+          top: nilSide,
+          bottom: nilSide,
+          left: nilSide,
+          right: nilSide,
+        }
+      : undefined;
+
+  return new DocxTableCell({
+    children: paras,
+    columnSpan: colspan > 1 ? colspan : undefined,
+    rowSpan: rowspan > 1 ? rowspan : undefined,
+    shading,
+    borders,
+    width: { size: 0, type: WidthType.AUTO },
+  });
+}
+
+/** Ширины колонок в DXA (условно px×15, как отступ в `tableIndent`). */
+function columnWidthsTwipsFromTableJson(node: JSONContent): number[] | undefined {
+  const firstRow = node.content?.[0];
+  if (!firstRow?.content?.length) return undefined;
+  const widths: number[] = [];
+  for (const cell of firstRow.content) {
+    const cw = cell.attrs?.colwidth as number[] | null | undefined;
+    const cs = Math.max(1, Number(cell.attrs?.colspan) || 1);
+    if (cw?.length) {
+      for (let i = 0; i < cs; i++) {
+        const px = cw[Math.min(i, cw.length - 1)] ?? 72;
+        widths.push(Math.max(0, Math.round(Number(px) * 15)));
+      }
+    } else {
+      for (let i = 0; i < cs; i++) widths.push(0);
+    }
+  }
+  if (widths.length === 0) return undefined;
+  if (widths.every((w) => w === 0)) return undefined;
+  return widths;
+}
+
 function jsonToDocxElements(content: JSONContent[]): (Paragraph | DocxTable)[] {
   const elements: (Paragraph | DocxTable)[] = [];
 
@@ -134,14 +238,11 @@ function jsonToDocxElements(content: JSONContent[]): (Paragraph | DocxTable)[] {
     } else if (node.type === "table") {
       const rows = (node.content || []).map((row) => {
         const cells = (row.content || []).map((cell) => {
-          const cellContent = cell.content || [];
-          const paras = cellContent.map((p) =>
-            new Paragraph({
-              children: processInlineContent(p.content),
-            })
-          );
+          if (cell.type === "tableCell" || cell.type === "tableHeader") {
+            return cellJsonToDocxCell(cell);
+          }
           return new DocxTableCell({
-            children: paras.length > 0 ? paras : [new Paragraph("")],
+            children: [new Paragraph("")],
             width: { size: 0, type: WidthType.AUTO },
           });
         });
@@ -149,7 +250,32 @@ function jsonToDocxElements(content: JSONContent[]): (Paragraph | DocxTable)[] {
       });
 
       if (rows.length > 0) {
-        elements.push(new DocxTable({ rows }));
+        const ta = node.attrs?.tableAlign as string | undefined;
+        const alignment =
+          ta === "center"
+            ? AlignmentType.CENTER
+            : ta === "right"
+              ? AlignmentType.RIGHT
+              : AlignmentType.LEFT;
+        const indentPx = Number(node.attrs?.tableIndent) || 0;
+        const indent =
+          indentPx > 0
+            ? {
+                size: Math.round(indentPx * 15),
+                type: WidthType.DXA,
+              }
+            : undefined;
+
+        const columnWidths = columnWidthsTwipsFromTableJson(node);
+
+        elements.push(
+          new DocxTable({
+            rows,
+            alignment,
+            ...(indent ? { indent } : {}),
+            ...(columnWidths ? { columnWidths } : {}),
+          }),
+        );
       }
     } else if (node.type === "horizontalRule") {
       elements.push(new Paragraph({ thematicBreak: true }));
@@ -176,11 +302,10 @@ function jsonToDocxElements(content: JSONContent[]): (Paragraph | DocxTable)[] {
   return elements;
 }
 
-export async function exportToDocx(editor: Editor, filename: string) {
+export async function buildEditorDocxBlob(editor: Editor): Promise<Blob> {
   const json = migrateDocJson(editor.getJSON());
   const content = flattenDocPagesForExport(json.content);
   const children = jsonToDocxElements(content);
-
   const doc = new Document({
     sections: [
       {
@@ -189,18 +314,64 @@ export async function exportToDocx(editor: Editor, filename: string) {
       },
     ],
   });
+  return Packer.toBlob(doc);
+}
 
+export async function buildProjectDocxBlob(project: StoryProject): Promise<Blob> {
+  const content: JSONContent[] = [];
+  for (const chapter of project.chapters) {
+    content.push({
+      type: "heading",
+      attrs: { level: 1 },
+      content: [{ type: "text", text: chapter.title }],
+    });
+    for (const scene of chapter.scenes) {
+      content.push({
+        type: "heading",
+        attrs: { level: 2 },
+        content: [{ type: "text", text: scene.title }],
+      });
+      const sceneBlocks = scene.content.content ?? [];
+      content.push(...sceneBlocks);
+    }
+  }
+  const children = jsonToDocxElements(content);
+  const doc = new Document({
+    sections: [
+      {
+        properties: {},
+        children: children.length > 0 ? children : [new Paragraph("")],
+      },
+    ],
+  });
+  return Packer.toBlob(doc);
+}
+
+export async function exportToDocx(editor: Editor, filename: string) {
+  const blob = await buildEditorDocxBlob(editor);
   const safeName = filename.endsWith(".docx") ? filename : `${filename}.docx`;
 
   if (isTauri()) {
     const path = await tauriSaveDialog(safeName);
     if (path) {
-      const blob = await Packer.toBlob(doc);
       const buf = new Uint8Array(await blob.arrayBuffer());
       await tauriWriteFile(path, buf);
     }
   } else {
-    const blob = await Packer.toBlob(doc);
+    saveAs(blob, safeName);
+  }
+}
+
+export async function exportProjectToDocx(project: StoryProject, filename: string) {
+  const blob = await buildProjectDocxBlob(project);
+  const safeName = filename.endsWith(".docx") ? filename : `${filename}.docx`;
+  if (isTauri()) {
+    const path = await tauriSaveDialog(safeName);
+    if (path) {
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      await tauriWriteFile(path, buf);
+    }
+  } else {
     saveAs(blob, safeName);
   }
 }
@@ -210,7 +381,7 @@ function normalizeImportedHtml(html: string): string {
 
   const doc = new DOMParser().parseFromString(html, "text/html");
 
-  // Таблицы из Word часто тащат <colgroup>/<col> с px-ширинами — лист сжимается в узкую колонку.
+  // Таблицы из типичных DOCX часто тащат <colgroup>/<col> с px-ширинами — лист сжимается в узкую колонку.
   doc.querySelectorAll("colgroup").forEach((cg) => cg.remove());
   doc.querySelectorAll("table col").forEach((col) => col.remove());
 

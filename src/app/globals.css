@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-word-blue: #2B579A;
-  --color-word-blue-hover: #1E3F70;
-  --color-canvas-bg: #e8e8e8;
-  --color-toolbar-bg: #F3F3F3;
-  --color-toolbar-border: #D1D1D1;
-  --color-ribbon-active: #FFFFFF;
-  --color-status-bg: #F3F3F3;
+  --color-chrome-accent: #3b4a6b;
+  --color-chrome-accent-hover: #2f3b55;
+  /* App shell (dark chrome) */
+  --color-shell-bg: #121417;
+  --color-shell-text: #d1d5db;
+  --color-canvas-bg: #d4d0c8;
+  --color-toolbar-bg: #1a1a1e;
+  --color-toolbar-border: #2d2d32;
+  --color-ribbon-active: #252529;
+  --color-status-bg: #121417;
 }
 
 /* Удобнее читать выделенный текст в редакторе */
 ::selection {
-  background: rgba(43, 87, 154, 0.22);
+  background: rgba(93, 112, 148, 0.24);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -34,10 +37,28 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
-  color: #333;
-  background: var(--color-canvas-bg);
+  color: var(--color-shell-text);
+  background: var(--color-shell-bg);
+}
+
+/* Базовый parity скроллбаров в desktop-режиме (macOS/Windows). */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+  background-clip: content-box;
 }
 
 .tiptap {
@@ -46,10 +67,53 @@ html, body {
   caret-color: #000;
   counter-reset: doc-page;
   width: 100%;
+  /* prosemirror-tables: минимальная ширина ячейки при отсутствии colwidth */
+  --default-cell-min-width: 48px;
+}
+
+/* Light sheet: must beat shell `body` color (#d1d5db) and any utility; inline + inherit on canvas also set in DocumentCanvas. */
+[data-canvas-appearance="light"] .tiptap {
+  color: var(--doc-foreground, #1f2937) !important;
+  caret-color: var(--doc-caret, #111827) !important;
+}
+
+/*
+ * TipTap Color / TextStyle stores color as inline `style="color: …"` on spans.
+ * Author `!important` beats non-important inline styles, so `inherit` pulls ink from the paragraph/sheet.
+ */
+[data-canvas-appearance="light"] .tiptap *:not(a):not(.continuity-scene-marker) {
+  color: inherit !important;
+}
+
+[data-canvas-appearance="light"] .tiptap .doc-page-body {
+  color: var(--doc-foreground, #1f2937);
+}
+
+[data-canvas-appearance="light"] .tiptap h1,
+[data-canvas-appearance="light"] .tiptap h2,
+[data-canvas-appearance="light"] .tiptap h3,
+[data-canvas-appearance="light"] .tiptap h4,
+[data-canvas-appearance="light"] .tiptap h5,
+[data-canvas-appearance="light"] .tiptap h6 {
+  color: #111827 !important;
+}
+
+[data-canvas-appearance="light"] .tiptap blockquote {
+  color: #4b5563 !important;
+  border-left-color: #9ca3af;
+}
+
+[data-canvas-appearance="dark"] .tiptap {
+  color: var(--doc-foreground, #e8e8ed) !important;
+  caret-color: var(--doc-caret, #e8e8ed) !important;
+}
+
+[data-canvas-appearance="dark"] .tiptap *:not(a):not(.continuity-scene-marker) {
+  color: inherit !important;
 }
 
 .tiptap:focus-visible {
-  outline: 2px solid rgba(43, 87, 154, 0.35);
+  outline: 2px solid rgba(79, 96, 130, 0.35);
   outline-offset: 2px;
 }
 
@@ -66,11 +130,76 @@ html, body {
   max-height: var(--doc-page-height-px, 1123px);
   margin: 0 auto var(--doc-page-gap-px, 24px);
   box-sizing: border-box;
-  background: #fff;
+  /* Default: light parchment (overridden per canvas mode) */
+  background: linear-gradient(180deg, #faf6f0 0%, #f3efe8 100%);
   box-shadow: var(--doc-sheet-shadow, 0 0 0 1px #9e9e9e, 0 4px 12px rgba(0, 0, 0, 0.08));
   position: relative;
   counter-increment: doc-page;
   overflow: hidden;
+  /* Смягчает срез глифов у края листа; игнорируется в старых движках. */
+  overflow-clip-margin: 1px;
+}
+
+/* Document sheet: light mode — off-white / parchment (not pure white) */
+[data-canvas-appearance="light"] .doc-page-sheet {
+  background: linear-gradient(180deg, #faf6f0 0%, #f3efe8 100%);
+  box-shadow:
+    var(--doc-sheet-shadow, 0 0 0 0.75px rgba(0, 0, 0, 0.12)),
+    0 6px 22px rgba(0, 0, 0, 0.07);
+}
+
+/* Document sheet: dark mode — elevated charcoal sheet */
+[data-canvas-appearance="dark"] .doc-page-sheet {
+  background: linear-gradient(180deg, #252529 0%, #2e2e34 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+[data-canvas-appearance="dark"] .doc-page-sheet::after {
+  color: #9ca3af;
+}
+
+[data-canvas-appearance="dark"] .tiptap h1,
+[data-canvas-appearance="dark"] .tiptap h2,
+[data-canvas-appearance="dark"] .tiptap h3,
+[data-canvas-appearance="dark"] .tiptap h4,
+[data-canvas-appearance="dark"] .tiptap h5,
+[data-canvas-appearance="dark"] .tiptap h6 {
+  color: #f3f4f6;
+}
+
+[data-canvas-appearance="dark"] .tiptap blockquote {
+  border-left-color: #52525b;
+  color: #a1a1aa;
+}
+
+[data-canvas-appearance="dark"] .tiptap a {
+  color: #c4b5fd;
+}
+
+[data-canvas-appearance="dark"] .tiptap hr {
+  border-top-color: #3f3f46;
+}
+
+[data-canvas-appearance="dark"] [data-show-text-boundaries="true"] .doc-page-body {
+  outline-color: #52525b;
+}
+
+[data-canvas-appearance="dark"] .tiptap th {
+  background: #2e2e34;
+  color: #e8e8ed;
+}
+
+[data-canvas-appearance="dark"] .tiptap th,
+[data-canvas-appearance="dark"] .tiptap td {
+  border-color: #3f3f46;
+}
+
+[data-canvas-appearance="dark"] .tiptap-table-drag-handle {
+  background: #2e2e34;
+  border-color: #52525b;
+  color: #d4d4d8;
 }
 
 .doc-page-sheet::after {
@@ -86,6 +215,29 @@ html, body {
   user-select: none;
 }
 
+/* Варианты оформления листа (ИИ / ручной выбор через data-page-variant) */
+.doc-page-sheet[data-page-variant="soft"] {
+  background: linear-gradient(180deg, #fefefe 0%, #f7f7f9 100%);
+  box-shadow:
+    var(--doc-sheet-shadow, 0 0 0 1px #c5c5c5),
+    0 8px 28px rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+}
+
+.doc-page-sheet[data-page-variant="tinted"] {
+  background: linear-gradient(165deg, #f7f3e9 0%, #ffffff 55%);
+  box-shadow:
+    0 0 0 1px rgba(98, 112, 132, 0.22),
+    0 10px 32px rgba(98, 112, 132, 0.12);
+  border-radius: 2px;
+}
+
+.doc-page-sheet[data-page-variant="minimal"] {
+  background: #fff;
+  box-shadow: 0 0 0 1px #d0d0d0;
+  border-radius: 0;
+}
+
 .doc-page-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -94,6 +246,22 @@ html, body {
   padding: var(--doc-margin-top, 76px) var(--doc-margin-right, 76px) var(--doc-margin-bottom, 76px) var(--doc-margin-left, 76px);
   box-sizing: border-box;
   position: relative;
+  overflow: hidden;
+  display: flow-root;
+  --doc-block-gap: 16px;
+}
+
+/* Deterministic page-flow model: reset browser default vertical margins. */
+.doc-page-body * {
+  margin-block: 0;
+}
+
+.doc-page-body > * + * {
+  margin-top: var(--doc-block-gap, 16px);
+}
+
+.doc-page-body li + li {
+  margin-top: 2px;
 }
 
 [data-show-text-boundaries="true"] .doc-page-body {
@@ -115,21 +283,27 @@ html, body {
   line-height: 1.15;
 }
 
-.tiptap h1 { font-size: 24px; font-weight: bold; margin: 12px 0 4px; }
-.tiptap h2 { font-size: 18px; font-weight: bold; margin: 10px 0 4px; }
-.tiptap h3 { font-size: 14px; font-weight: bold; margin: 8px 0 4px; }
-.tiptap h4 { font-size: 13px; font-weight: bold; margin: 6px 0 2px; }
-.tiptap h5 { font-size: 12px; font-weight: bold; margin: 4px 0 2px; }
-.tiptap h6 { font-size: 11px; font-weight: bold; margin: 4px 0 2px; }
+.warning-mark {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #f59e0b;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
 
-.tiptap ul { list-style-type: disc; padding-left: 24px; margin: 4px 0; }
-.tiptap ol { list-style-type: decimal; padding-left: 24px; margin: 4px 0; }
-.tiptap li { margin: 2px 0; }
+.tiptap h1 { font-size: 24px; font-weight: bold; }
+.tiptap h2 { font-size: 18px; font-weight: bold; }
+.tiptap h3 { font-size: 14px; font-weight: bold; }
+.tiptap h4 { font-size: 13px; font-weight: bold; }
+.tiptap h5 { font-size: 12px; font-weight: bold; }
+.tiptap h6 { font-size: 11px; font-weight: bold; }
+
+.tiptap ul { list-style-type: disc; padding-left: 24px; }
+.tiptap ol { list-style-type: decimal; padding-left: 24px; }
 .tiptap li p { margin: 0; }
 
 .tiptap blockquote {
   border-left: 3px solid #ccc;
-  margin: 8px 0;
   padding-left: 12px;
   color: #666;
 }
@@ -137,25 +311,23 @@ html, body {
 .tiptap .tableWrapper {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  /* Горизонтальный скролл, если таблица шире страницы; не режем ручки смены ширины */
+  overflow-x: auto;
 }
 
 .tiptap table {
   border-collapse: collapse;
-  width: 100% !important;
+  /* Без !important: Tiptap задаёт width/minWidth в inline при фиксированных колонках */
+  width: 100%;
   max-width: 100%;
-  margin: 8px 0;
   table-layout: fixed;
 }
 
-.tiptap colgroup,
-.tiptap colgroup col {
-  width: auto !important;
-}
+/* Не переопределять inline width/min-width у <col> — иначе не работает columnResizing */
 
 .tiptap th,
 .tiptap td {
-  /* Базовая сетка, если нет inline-стилей из Word */
+  /* Базовая сетка, если нет inline-стилей из импорта DOCX */
   border: 1px solid #b8b8b8;
   padding: 8px 10px;
   min-width: 48px;
@@ -199,8 +371,20 @@ html, body {
   top: 0;
   bottom: 0;
   width: 4px;
-  background-color: #adf;
+  z-index: 20;
+  background-color: rgba(173, 221, 255, 0.35);
   pointer-events: none;
+}
+
+.tiptap td:hover > .column-resize-handle,
+.tiptap th:hover > .column-resize-handle {
+  background-color: #7ec8ff;
+}
+
+/* Курсор при перетаскивании границы колонки (класс вешается на корень редактора) */
+.tiptap.resize-cursor,
+.tiptap.resize-cursor * {
+  cursor: col-resize !important;
 }
 
 .tiptap img {
@@ -259,13 +443,6 @@ html, body {
   border-top-width: 2px;
 }
 
-.tableWrapper {
-  overflow-x: auto;
-}
-
-.resize-cursor {
-  cursor: col-resize;
-}
 
 @media print {
   body * {
@@ -298,6 +475,72 @@ html, body {
   .page-spacer {
     display: none !important;
   }
+}
+
+/* Ручка перетаскивания таблицы (@tiptap/extension-drag-handle) */
+.tiptap-table-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #c5c5c5;
+  border-radius: 3px;
+  background: #f3f3f3;
+  cursor: grab;
+  color: #555;
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.tiptap-table-drag-handle::before {
+  content: "⋮⋮";
+  letter-spacing: -2px;
+  font-weight: bold;
+}
+
+.tiptap-table-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Подсветка вхождений в панели «Найти» */
+.tiptap .search-match-hl {
+  background: rgba(255, 230, 120, 0.65);
+  border-radius: 1px;
+}
+
+.tiptap .continuity-heading-hl {
+  background: linear-gradient(
+    to bottom,
+    rgba(245, 158, 11, 0) 72%,
+    rgba(245, 158, 11, 0.35) 72%
+  );
+  border-radius: 2px;
+}
+
+.tiptap .continuity-scene-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  margin-left: 2px;
+  border: 1px solid #d97706;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.tiptap .continuity-scene-marker:hover {
+  background: #fef3c7;
 }
 
 @page {

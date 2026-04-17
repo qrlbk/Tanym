@@ -82,7 +82,7 @@ export default function ReviewTab() {
 
       <div className="w-px h-12 bg-gray-200" />
 
-      {/* Word count / stats */}
+      {/* Статистика текста */}
       <div ref={statsRef}>
         <button
           onClick={() => setShowStats(!showStats)}

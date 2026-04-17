@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useEditorState } from "@tiptap/react";
 import {
@@ -16,10 +16,14 @@ import {
   AArrowDown,
   RemoveFormatting,
   Type,
+  MoreHorizontal,
 } from "lucide-react";
 import { useEditorContext } from "@/components/Editor/EditorProvider";
 import { FONT_SIZES, COLORS } from "@/lib/constants";
 import { useFontStore } from "@/stores/fontStore";
+import { UI_COLORS, THEME } from "@/lib/theme/colors";
+
+const BTN = "rounded-[9px]";
 
 function ToolBtn({
   onClick,
@@ -36,20 +40,23 @@ function ToolBtn({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="w-[24px] h-[22px] flex items-center justify-center rounded transition-colors disabled:opacity-30"
+      className={`${BTN} flex h-8 w-8 shrink-0 items-center justify-center transition-colors disabled:opacity-30`}
       style={{
-        background: active ? "#D0E0F0" : "transparent",
-        border: active ? "1px solid #A0C0E0" : "1px solid transparent",
+        color: UI_COLORS.shellText,
+        background: active ? UI_COLORS.accentSubtleBg : "transparent",
+        border: active ? `1px solid ${UI_COLORS.accentPrimaryBorder}` : "1px solid transparent",
+        boxShadow: active ? `0 0 0 1px ${UI_COLORS.accentSubtleBg}` : undefined,
       }}
       onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.background = "#E8E8E8";
+        if (!active && !disabled) e.currentTarget.style.background = UI_COLORS.ribbon.controlHover;
       }}
       onMouseLeave={(e) => {
         if (!active)
-          e.currentTarget.style.background = active ? "#D0E0F0" : "transparent";
+          e.currentTarget.style.background = active ? UI_COLORS.accentSubtleBg : "transparent";
       }}
     >
       {children}
@@ -62,23 +69,25 @@ function useDropdownPosition(anchorRef: React.RefObject<HTMLElement | null>, isO
   useEffect(() => {
     if (!isOpen || !anchorRef.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
   }, [isOpen, anchorRef]);
   return pos;
 }
 
-function PortalDropdown({
+function PortalDropdownDark({
   anchorRef,
   isOpen,
   onClose,
   width,
   children,
+  maxHeight = 280,
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
   isOpen: boolean;
   onClose: () => void;
   width: number;
   children: React.ReactNode;
+  maxHeight?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const pos = useDropdownPosition(anchorRef, isOpen);
@@ -101,34 +110,37 @@ function PortalDropdown({
 
   if (!isOpen || typeof window === "undefined") return null;
 
-  const maxH = window.innerHeight - pos.top - 8;
-  const flipUp = maxH < 150;
+  const spaceBelow = window.innerHeight - pos.top - 8;
+  const flipUp = spaceBelow < 120;
   let top = pos.top;
-  let finalMaxH = Math.max(100, maxH);
+  let finalMaxH = Math.min(maxHeight, Math.max(120, spaceBelow));
 
   if (flipUp && anchorRef.current) {
     const rect = anchorRef.current.getBoundingClientRect();
-    top = rect.top - 2;
-    finalMaxH = Math.min(300, rect.top - 8);
+    top = rect.top - 4;
+    finalMaxH = Math.min(maxHeight, Math.max(120, rect.top - 8));
   }
 
   return createPortal(
     <div
       ref={ref}
-      className="bg-white border border-gray-300 rounded shadow-lg overflow-y-auto"
+      className={`${BTN} overflow-y-auto border py-1 shadow-xl`}
       style={{
         position: "fixed",
         top: flipUp ? undefined : top,
-        bottom: flipUp ? window.innerHeight - top : undefined,
+        bottom: flipUp ? window.innerHeight - top + 4 : undefined,
         left: pos.left,
         width,
         maxHeight: finalMaxH,
-        zIndex: 9999,
+        zIndex: 10050,
+        borderColor: UI_COLORS.shellBorder,
+        background: UI_COLORS.shellBgElevated,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
       }}
     >
       {children}
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -167,28 +179,31 @@ function ColorPickerPortal({
 
   if (flipUp && anchorRef.current) {
     const rect = anchorRef.current.getBoundingClientRect();
-    top = rect.top - 2;
+    top = rect.top - 4;
   }
 
   return createPortal(
     <div
       ref={ref}
-      className="p-2 bg-white border border-gray-300 rounded shadow-lg"
+      className={`${BTN} border p-2 shadow-xl`}
       style={{
         position: "fixed",
         top: flipUp ? undefined : top,
         bottom: flipUp ? window.innerHeight - top : undefined,
         left: pos.left,
         width: 220,
-        zIndex: 9999,
+        zIndex: 10050,
+        borderColor: UI_COLORS.shellBorder,
+        background: UI_COLORS.shellBgElevated,
       }}
     >
       <div className="grid grid-cols-10 gap-0.5">
         {COLORS.map((color) => (
           <button
             key={color}
-            className="w-5 h-5 rounded-sm border border-gray-200 hover:scale-110 transition-transform"
-            style={{ background: color }}
+            type="button"
+            className="h-5 w-5 rounded border transition-transform hover:scale-110"
+            style={{ background: color, borderColor: UI_COLORS.shellBorder }}
             onClick={() => {
               onSelect(color);
               onClose();
@@ -197,7 +212,7 @@ function ColorPickerPortal({
         ))}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -206,19 +221,17 @@ export default function FontGroup() {
   const fontFamilies = useFontStore((s) => s.fonts);
   const [showFontDropdown, setShowFontDropdown] = useState(false);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
-  const [fontInputValue, setFontInputValue] = useState("");
-  const [sizeInputValue, setSizeInputValue] = useState("");
-  const [isFontEditing, setIsFontEditing] = useState(false);
-  const [isSizeEditing, setIsSizeEditing] = useState(false);
+  const [fontQuery, setFontQuery] = useState("");
 
-  const fontRef = useRef<HTMLDivElement>(null);
+  const fontTriggerRef = useRef<HTMLButtonElement>(null);
   const sizeRef = useRef<HTMLDivElement>(null);
-  const fontInputRef = useRef<HTMLInputElement>(null);
-  const sizeInputRef = useRef<HTMLInputElement>(null);
   const colorBtnRef = useRef<HTMLDivElement>(null);
   const highlightBtnRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const firstMatchRef = useRef<HTMLButtonElement | null>(null);
 
   const editorState = useEditorState({
     editor,
@@ -227,7 +240,7 @@ export default function FontGroup() {
         return {
           fontFamily: "Calibri",
           fontSize: "11pt",
-          fontColor: "#000000",
+          fontColor: "#e5e7eb",
           isBold: false,
           isItalic: false,
           isUnderline: false,
@@ -241,7 +254,7 @@ export default function FontGroup() {
       return {
         fontFamily: (ts.fontFamily as string) || "Calibri",
         fontSize: (ts.fontSize as string) || "11pt",
-        fontColor: (ts.color as string) || "#000000",
+        fontColor: (ts.color as string) || "#e5e7eb",
         isBold: e.isActive("bold"),
         isItalic: e.isActive("italic"),
         isUnderline: e.isActive("underline"),
@@ -251,6 +264,31 @@ export default function FontGroup() {
       };
     },
   });
+
+  const q = fontQuery.trim().toLowerCase();
+  const firstMatchingFont = useMemo(() => {
+    if (!q) return null;
+    return fontFamilies.find((f) => f.toLowerCase().includes(q)) ?? null;
+  }, [q, fontFamilies]);
+
+  const scrollTargetFont = useMemo(() => {
+    if (q && firstMatchingFont) return firstMatchingFont;
+    return fontFamilies.includes(editorState?.fontFamily ?? "")
+      ? (editorState?.fontFamily ?? "")
+      : fontFamilies[0] ?? "";
+  }, [q, firstMatchingFont, fontFamilies, editorState?.fontFamily]);
+
+  useEffect(() => {
+    if (!showFontDropdown) return;
+    requestAnimationFrame(() => {
+      firstMatchRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, [fontQuery, showFontDropdown, scrollTargetFont]);
+
+  const openFontPicker = useCallback(() => {
+    setFontQuery("");
+    setShowFontDropdown(true);
+  }, []);
 
   if (!editor || !editorState) return null;
 
@@ -267,330 +305,228 @@ export default function FontGroup() {
   } = editorState;
   const sizeNum = parseFloat(fontSize) || 11;
 
-  const filteredFonts = isFontEditing && fontInputValue
-    ? fontFamilies.filter((f) =>
-        f.toLowerCase().includes(fontInputValue.toLowerCase())
-      )
-    : fontFamilies;
-
-  const startFontEdit = () => {
-    setFontInputValue(fontFamily);
-    setIsFontEditing(true);
-    setShowFontDropdown(true);
-    setTimeout(() => fontInputRef.current?.select(), 0);
-  };
-
-  const commitFont = (value: string) => {
-    const trimmed = value.trim();
-    if (trimmed) {
-      editor.chain().focus().setFontFamily(trimmed).run();
-    }
-    setIsFontEditing(false);
-    setShowFontDropdown(false);
-  };
-
-  const startSizeEdit = () => {
-    setSizeInputValue(String(sizeNum));
-    setIsSizeEditing(true);
-    setShowSizeDropdown(true);
-    setTimeout(() => sizeInputRef.current?.select(), 0);
-  };
-
-  const commitSize = (value: string) => {
-    const num = parseFloat(value);
-    if (num && num > 0 && num <= 999) {
-      editor
-        .chain()
-        .focus()
-        .setMark("textStyle", { fontSize: `${num}pt` })
-        .run();
-    }
-    setIsSizeEditing(false);
-    setShowSizeDropdown(false);
-  };
-
   return (
-    <div className="flex flex-col gap-0.5 py-1 px-1">
-      {/* Row 1: Font family, size, increase/decrease */}
-      <div className="flex items-center gap-0.5">
-        {/* Font family - editable combobox */}
-        <div className="relative" ref={fontRef}>
-          {isFontEditing ? (
-            <input
-              ref={fontInputRef}
-              className="h-[22px] px-1.5 text-[11px] border border-blue-400 rounded bg-white w-[110px] outline-none"
-              value={fontInputValue}
-              onChange={(e) => {
-                setFontInputValue(e.target.value);
-                setShowFontDropdown(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitFont(fontInputValue);
-                if (e.key === "Escape") {
-                  setIsFontEditing(false);
-                  setShowFontDropdown(false);
-                }
-              }}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!fontRef.current?.contains(document.activeElement)) {
-                    setIsFontEditing(false);
-                    setShowFontDropdown(false);
-                  }
-                }, 150);
-              }}
-              autoFocus
-            />
-          ) : (
-            <button
-              className="flex items-center gap-0.5 h-[22px] px-1.5 text-[11px] border border-gray-300 rounded bg-white hover:border-gray-400 w-[110px]"
-              onClick={startFontEdit}
-            >
-              <span className="truncate flex-1 text-left" style={{ fontFamily }}>
-                {fontFamily}
-              </span>
-              <ChevronDown size={10} className="shrink-0" />
-            </button>
-          )}
-          <PortalDropdown
-            anchorRef={fontRef}
+    <div className="flex min-w-0 flex-col gap-1.5 py-0.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1">
+        <div className="relative min-w-0 flex-1" style={{ minWidth: "120px", maxWidth: "220px" }}>
+          <button
+            ref={fontTriggerRef}
+            type="button"
+            onClick={() => {
+              if (showFontDropdown) {
+                setShowFontDropdown(false);
+              } else {
+                openFontPicker();
+              }
+            }}
+            className={`${BTN} flex h-8 w-full min-w-0 items-center gap-1 border px-2 text-left text-[12px]`}
+            style={{
+              borderColor: UI_COLORS.ribbon.controlBorder,
+              background: UI_COLORS.shellBgElevated,
+              color: UI_COLORS.shellText,
+            }}
+            title="Шрифт"
+          >
+            <span className="min-w-0 flex-1 truncate" style={{ fontFamily }}>
+              {fontFamily}
+            </span>
+            <ChevronDown size={14} className="shrink-0 opacity-70" />
+          </button>
+          <PortalDropdownDark
+            anchorRef={fontTriggerRef}
             isOpen={showFontDropdown}
             onClose={() => {
+              setFontQuery("");
               setShowFontDropdown(false);
-              setIsFontEditing(false);
             }}
-            width={180}
+            width={Math.max(220, fontTriggerRef.current?.offsetWidth ?? 220)}
+            maxHeight={320}
           >
-            {filteredFonts.map((font) => (
-              <button
-                key={font}
-                className="w-full text-left px-2 py-1 text-[12px] hover:bg-blue-50"
+            <div className="sticky top-0 z-[1] border-b px-2 pb-2 pt-1" style={{ borderColor: UI_COLORS.shellBorder, background: UI_COLORS.shellBgElevated }}>
+              <input
+                type="search"
+                placeholder="Поиск шрифта…"
+                className={`${BTN} w-full border px-2 py-1.5 text-[12px] outline-none`}
                 style={{
-                  fontFamily: font,
-                  background: font === fontFamily ? "#E8F0FE" : undefined,
+                  borderColor: UI_COLORS.ribbon.controlBorder,
+                  background: THEME.surface.input,
+                  color: UI_COLORS.shellText,
                 }}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  editor.chain().focus().setFontFamily(font).run();
-                  setShowFontDropdown(false);
-                  setIsFontEditing(false);
+                value={fontQuery}
+                onChange={(e) => setFontQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setShowFontDropdown(false);
                 }}
-              >
-                {font}
-              </button>
-            ))}
-            {filteredFonts.length === 0 && (
-              <div className="px-2 py-2 text-[11px] text-gray-400">
-                Не найдено
-              </div>
-            )}
-          </PortalDropdown>
+                autoFocus
+              />
+            </div>
+            {fontFamilies.map((font) => {
+              const match = !q || font.toLowerCase().includes(q);
+              return (
+                <button
+                  key={font}
+                  ref={font === scrollTargetFont ? (el) => { firstMatchRef.current = el; } : undefined}
+                  type="button"
+                  className="w-full px-2.5 py-1.5 text-left text-[12px] transition-opacity"
+                  style={{
+                    fontFamily: font,
+                    opacity: match ? 1 : 0.32,
+                    background: font === fontFamily ? UI_COLORS.accentSubtleBg : "transparent",
+                    color: UI_COLORS.shellText,
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    editor.chain().focus().setFontFamily(font).run();
+                    setShowFontDropdown(false);
+                    setFontQuery("");
+                  }}
+                >
+                  {font}
+                </button>
+              );
+            })}
+          </PortalDropdownDark>
         </div>
 
-        {/* Font size - editable input */}
-        <div className="relative" ref={sizeRef}>
-          {isSizeEditing ? (
-            <input
-              ref={sizeInputRef}
-              className="h-[22px] px-1 text-[11px] border border-blue-400 rounded bg-white w-[48px] outline-none text-center"
-              value={sizeInputValue}
-              onChange={(e) => {
-                setSizeInputValue(e.target.value);
-                setShowSizeDropdown(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitSize(sizeInputValue);
-                if (e.key === "Escape") {
-                  setIsSizeEditing(false);
-                  setShowSizeDropdown(false);
-                }
-              }}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!sizeRef.current?.contains(document.activeElement)) {
-                    commitSize(sizeInputValue);
-                  }
-                }, 150);
-              }}
-              autoFocus
-            />
-          ) : (
-            <button
-              className="flex items-center gap-0.5 h-[22px] px-1 text-[11px] border border-gray-300 rounded bg-white hover:border-gray-400 w-[48px]"
-              onClick={startSizeEdit}
-            >
-              <span className="truncate flex-1 text-left">
-                {fontSize.replace("pt", "")}
-              </span>
-              <ChevronDown size={10} className="shrink-0" />
-            </button>
-          )}
-          <PortalDropdown
+        <div className="relative shrink-0" ref={sizeRef}>
+          <button
+            type="button"
+            onClick={() => setShowSizeDropdown((v) => !v)}
+            className={`${BTN} flex h-8 w-[56px] items-center justify-center gap-0.5 border px-1 text-[12px]`}
+            style={{
+              borderColor: UI_COLORS.ribbon.controlBorder,
+              background: UI_COLORS.shellBgElevated,
+              color: UI_COLORS.shellText,
+            }}
+            title="Размер"
+          >
+            {fontSize.replace("pt", "")}
+            <ChevronDown size={12} className="opacity-70" />
+          </button>
+          <PortalDropdownDark
             anchorRef={sizeRef}
             isOpen={showSizeDropdown}
-            onClose={() => {
-              setShowSizeDropdown(false);
-              setIsSizeEditing(false);
-            }}
-            width={60}
+            onClose={() => setShowSizeDropdown(false)}
+            width={72}
+            maxHeight={240}
           >
             {FONT_SIZES.map((size) => (
               <button
                 key={size}
-                className="w-full text-left px-2 py-1 text-[12px] hover:bg-blue-50"
+                type="button"
+                className="w-full px-2 py-1.5 text-left text-[12px]"
                 style={{
                   background:
-                    parseFloat(fontSize) === parseFloat(size)
-                      ? "#E8F0FE"
-                      : undefined,
+                    parseFloat(fontSize) === parseFloat(size) ? UI_COLORS.accentSubtleBg : "transparent",
+                  color: UI_COLORS.shellText,
                 }}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  editor
-                    .chain()
-                    .focus()
-                    .setMark("textStyle", { fontSize: `${size}pt` })
-                    .run();
+                  editor.chain().focus().setMark("textStyle", { fontSize: `${size}pt` }).run();
                   setShowSizeDropdown(false);
-                  setIsSizeEditing(false);
                 }}
               >
                 {size}
               </button>
             ))}
-          </PortalDropdown>
+          </PortalDropdownDark>
         </div>
 
-        <ToolBtn
-          title="Увеличить размер"
-          onClick={() => {
-            editor
-              .chain()
-              .focus()
-              .setMark("textStyle", {
-                fontSize: `${Math.min(sizeNum + 1, 72)}pt`,
-              })
-              .run();
-          }}
-        >
-          <AArrowUp size={13} />
-        </ToolBtn>
-        <ToolBtn
-          title="Уменьшить размер"
-          onClick={() => {
-            editor
-              .chain()
-              .focus()
-              .setMark("textStyle", {
-                fontSize: `${Math.max(sizeNum - 1, 1)}pt`,
-              })
-              .run();
-          }}
-        >
-          <AArrowDown size={13} />
-        </ToolBtn>
+        <div className="flex shrink-0 items-center gap-0.5 rounded-[9px] border px-0.5 py-0.5" style={{ borderColor: UI_COLORS.ribbon.controlBorder }}>
+          <ToolBtn
+            title="Увеличить размер"
+            onClick={() =>
+              editor.chain().focus().setMark("textStyle", { fontSize: `${Math.min(sizeNum + 1, 72)}pt` }).run()
+            }
+          >
+            <AArrowUp size={14} />
+          </ToolBtn>
+          <ToolBtn
+            title="Уменьшить размер"
+            onClick={() =>
+              editor.chain().focus().setMark("textStyle", { fontSize: `${Math.max(sizeNum - 1, 1)}pt` }).run()
+            }
+          >
+            <AArrowDown size={14} />
+          </ToolBtn>
+          <ToolBtn
+            title="Очистить форматирование"
+            onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
+          >
+            <RemoveFormatting size={14} />
+          </ToolBtn>
+        </div>
+
+        <div className="relative shrink-0" ref={moreRef}>
+          <ToolBtn title="Дополнительно" onClick={() => setShowMore(!showMore)}>
+            <MoreHorizontal size={16} />
+          </ToolBtn>
+          <PortalDropdownDark
+            anchorRef={moreRef}
+            isOpen={showMore}
+            onClose={() => {
+              setShowMore(false);
+              setShowColorPicker(false);
+              setShowHighlightPicker(false);
+            }}
+            width={200}
+            maxHeight={360}
+          >
+            <div className="flex flex-col gap-1 px-1 py-1" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="flex justify-center gap-0.5">
+                <ToolBtn title="Подстрочный" active={isSubscript} onClick={() => editor.chain().focus().toggleSubscript().run()}>
+                  <Subscript size={14} />
+                </ToolBtn>
+                <ToolBtn title="Надстрочный" active={isSuperscript} onClick={() => editor.chain().focus().toggleSuperscript().run()}>
+                  <Superscript size={14} />
+                </ToolBtn>
+              </div>
+              <div className="flex items-center justify-center gap-1 border-t pt-1" style={{ borderColor: UI_COLORS.shellBorder }}>
+                <div ref={colorBtnRef}>
+                  <ToolBtn title="Цвет текста" onClick={() => setShowColorPicker(!showColorPicker)}>
+                    <div className="flex flex-col items-center">
+                      <Type size={12} />
+                      <div className="mt-[-1px] h-[2px] w-3 rounded-sm" style={{ background: fontColor }} />
+                    </div>
+                  </ToolBtn>
+                  {showColorPicker && (
+                    <ColorPickerPortal
+                      anchorRef={colorBtnRef}
+                      onSelect={(color) => editor.chain().focus().setColor(color).run()}
+                      onClose={() => setShowColorPicker(false)}
+                    />
+                  )}
+                </div>
+                <div ref={highlightBtnRef}>
+                  <ToolBtn title="Цвет выделения" onClick={() => setShowHighlightPicker(!showHighlightPicker)}>
+                    <Paintbrush size={14} />
+                  </ToolBtn>
+                  {showHighlightPicker && (
+                    <ColorPickerPortal
+                      anchorRef={highlightBtnRef}
+                      onSelect={(color) => editor.chain().focus().toggleHighlight({ color }).run()}
+                      onClose={() => setShowHighlightPicker(false)}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </PortalDropdownDark>
+        </div>
       </div>
 
-      {/* Row 2: B I U S, subscript, superscript, colors, clear */}
-      <div className="flex items-center gap-0.5">
-        <ToolBtn
-          title="Жирный (Ctrl+B)"
-          active={isBold}
-          onClick={() => editor.chain().focus().toggleBold().run()}
-        >
-          <Bold size={13} />
+      <div className="flex flex-wrap items-center gap-0.5">
+        <ToolBtn title="Жирный (Ctrl+B)" active={isBold} onClick={() => editor.chain().focus().toggleBold().run()}>
+          <Bold size={14} />
         </ToolBtn>
-        <ToolBtn
-          title="Курсив (Ctrl+I)"
-          active={isItalic}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-        >
-          <Italic size={13} />
+        <ToolBtn title="Курсив (Ctrl+I)" active={isItalic} onClick={() => editor.chain().focus().toggleItalic().run()}>
+          <Italic size={14} />
         </ToolBtn>
-        <ToolBtn
-          title="Подчёркнутый (Ctrl+U)"
-          active={isUnderline}
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-        >
-          <Underline size={13} />
+        <ToolBtn title="Подчёркнутый (Ctrl+U)" active={isUnderline} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+          <Underline size={14} />
         </ToolBtn>
-        <ToolBtn
-          title="Зачёркнутый"
-          active={isStrike}
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-        >
-          <Strikethrough size={13} />
-        </ToolBtn>
-        <ToolBtn
-          title="Подстрочный"
-          active={isSubscript}
-          onClick={() => editor.chain().focus().toggleSubscript().run()}
-        >
-          <Subscript size={13} />
-        </ToolBtn>
-        <ToolBtn
-          title="Надстрочный"
-          active={isSuperscript}
-          onClick={() => editor.chain().focus().toggleSuperscript().run()}
-        >
-          <Superscript size={13} />
-        </ToolBtn>
-
-        <div className="w-px h-4 bg-gray-300 mx-0.5" />
-
-        {/* Font color */}
-        <div className="relative" ref={colorBtnRef}>
-          <ToolBtn
-            title="Цвет текста"
-            onClick={() => setShowColorPicker(!showColorPicker)}
-          >
-            <div className="flex flex-col items-center">
-              <Type size={12} />
-              <div
-                className="w-3 h-[2px] rounded-sm mt-[-1px]"
-                style={{ background: fontColor }}
-              />
-            </div>
-          </ToolBtn>
-          {showColorPicker && (
-            <ColorPickerPortal
-              anchorRef={colorBtnRef}
-              onSelect={(color) => {
-                editor.chain().focus().setColor(color).run();
-              }}
-              onClose={() => setShowColorPicker(false)}
-            />
-          )}
-        </div>
-
-        {/* Highlight */}
-        <div className="relative" ref={highlightBtnRef}>
-          <ToolBtn
-            title="Цвет выделения"
-            onClick={() => setShowHighlightPicker(!showHighlightPicker)}
-          >
-            <Paintbrush size={13} />
-          </ToolBtn>
-          {showHighlightPicker && (
-            <ColorPickerPortal
-              anchorRef={highlightBtnRef}
-              onSelect={(color) =>
-                editor.chain().focus().toggleHighlight({ color }).run()
-              }
-              onClose={() => setShowHighlightPicker(false)}
-            />
-          )}
-        </div>
-
-        <div className="w-px h-4 bg-gray-300 mx-0.5" />
-
-        <ToolBtn
-          title="Очистить форматирование"
-          onClick={() =>
-            editor.chain().focus().clearNodes().unsetAllMarks().run()
-          }
-        >
-          <RemoveFormatting size={13} />
+        <ToolBtn title="Зачёркнутый" active={isStrike} onClick={() => editor.chain().focus().toggleStrike().run()}>
+          <Strikethrough size={14} />
         </ToolBtn>
       </div>
     </div>

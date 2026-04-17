@@ -1,12 +1,12 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Word AI",
+  "productName": "Tanym",
   "version": "0.1.0",
-  "identifier": "com.wordai.app",
+  "identifier": "com.tanym.app",
   "build": {
     "frontendDist": "../out",
-    "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:3010/?welcome=1",
+    "beforeDevCommand": "npm run dev -- --port 3010",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
@@ -14,9 +14,10 @@
     "windows": [
       {
         "label": "main",
-        "title": "Word AI",
+        "title": "Tanym",
         "width": 1280,
         "height": 800,
+        "maximized": true,
         "resizable": true,
         "fullscreen": false,
         "decorations": false
@@ -35,6 +36,19 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": false,
+      "dialog": true,
+      "endpoints": [
+        "https://updates.tanym.app/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBKEY"
+    }
   }
 }
