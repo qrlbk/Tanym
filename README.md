@@ -1,7 +1,7 @@
 # Tanym
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
+[License](LICENSE)
+[Node](package.json)
 
 **AI-редактор для авторов романов и длинной прозы на русском.** Знает ваш проект целиком: персонажей, главы, сцены, противоречия сюжета.
 
@@ -32,23 +32,29 @@
 
 ## Документация
 
+**Веб-раздел (EN / RU / KK):** после `npm run dev` откройте [http://localhost:3000/docs](http://localhost:3000/docs) (редирект на `/docs/en`). После `npm run build` статика в `out/docs/…`.
+
 | Ресурс | Описание |
-|--------|----------|
-| [docs/README.md](docs/README.md) | Оглавление документации |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Стек, структура репозитория, команды |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Подсистемы и потоки данных |
-| [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md) | Чеклист для публикации open source |
+| ------ | -------- |
+| [docs/README.md](docs/README.md) | Оглавление и ссылки на `content/docs` |
+| [content/docs/](content/docs/) | Исходники статей (Markdown по языкам) |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Указатель; полный текст — веб `/docs/…/development` |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Указатель; полный текст — веб `/docs/…/architecture` |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | Указатель; полный текст — веб `/docs/…/distribution` |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Указатель; полный текст — веб `/docs/…/performance` |
+| [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md) | Указатель; полный текст — веб `/docs/…/open-source` |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Как вносить вклад (PR, стиль, тесты) |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Правила сообщества |
 | [SECURITY.md](SECURITY.md) | Сообщения об уязвимостях |
 | [CHANGELOG.md](CHANGELOG.md) | История изменений |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Сторонние компоненты и лицензии |
 
+
 ## Требования
 
-- **Node.js 20+** и **npm** (версия Node зафиксирована в [`package.json`](package.json) в поле `engines`; при использовании [nvm](https://github.com/nvm-sh/nvm) можно выполнить `nvm use` — в корне есть [`.nvmrc`](.nvmrc)).
+- **Node.js 20+** и **npm** (версия Node зафиксирована в `[package.json](package.json)` в поле `engines`; при использовании [nvm](https://github.com/nvm-sh/nvm) можно выполнить `nvm use` — в корне есть `[.nvmrc](.nvmrc)`).
 - **Только веб** (браузер): Rust не обязателен.
-- **Десктоп (Tauri)**: [Rust](https://rustup.rs/) не ниже версии из [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) (`rust-version`), плюс системные зависимости для вашей ОС — см. [официальные prerequisites Tauri v2](https://v2.tauri.app/start/prerequisites/).
+- **Десктоп (Tauri)**: [Rust](https://rustup.rs/) не ниже версии из `[src-tauri/Cargo.toml](src-tauri/Cargo.toml)` (`rust-version`), плюс системные зависимости для вашей ОС — см. [официальные prerequisites Tauri v2](https://v2.tauri.app/start/prerequisites/).
 
 Node.js из репозитория автоматически не ставится: сначала установите его с [nodejs.org](https://nodejs.org/) или через nvm/Homebrew и т.п.
 
@@ -70,7 +76,7 @@ bash setup.sh
 .\setup.ps1
 ```
 
-Скрипт выполняет `npm install`, затем [`scripts/setup.mjs`](scripts/setup.mjs): создаёт `.env.local` из `.env.example` (если его ещё нет), проверяет наличие `rustc` нужной версии для Tauri.
+Скрипт выполняет `npm install`, затем `[scripts/setup.mjs](scripts/setup.mjs)`: создаёт `.env.local` из `.env.example` (если его ещё нет), проверяет наличие `rustc` нужной версии для Tauri.
 
 Если нужен **только веб** и Rust ставить не планируете, используйте:
 
@@ -115,25 +121,29 @@ OPENAI_API_KEY=...
 
 ## Запуск (после установки)
 
-| Цель | Команда |
-|------|--------|
-| Только веб (Next.js в браузере) | `npm run dev` |
-| Веб + нативное окно Tauri (dev-сервер Next поднимается автоматически) | `npm run tauri:dev` |
-| Продакшен-сборка веба | `npm run build` затем `npm run start` |
-| Сборка десктопного приложения | `npm run tauri:build` |
+
+| Цель                                                                  | Команда                               |
+| --------------------------------------------------------------------- | ------------------------------------- |
+| Только веб (Next.js в браузере)                                       | `npm run dev`                         |
+| Веб + нативное окно Tauri (dev-сервер Next поднимается автоматически) | `npm run tauri:dev`                   |
+| Продакшен-сборка веба                                                 | `npm run build` затем `npm run start` |
+| Сборка десктопного приложения                                         | `npm run tauri:build`                 |
+
 
 ## Скрипты npm
 
-| Команда | Описание |
-|--------|----------|
-| `npm run setup` | `.env.local` из примера; проверка Rust для Tauri; флаги `--install-rust`, `--skip-rust` (см. выше) |
-| `npm run dev` | Режим разработки (веб) |
-| `npm run build` | Сборка продакшена |
-| `npm run start` | Запуск после сборки |
-| `npm run lint` | ESLint |
-| `npm run test` | Vitest |
-| `npm run tauri:dev` | Десктоп (Tauri) в режиме разработки |
-| `npm run tauri:build` | Сборка десктоп-приложения |
+
+| Команда               | Описание                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| `npm run setup`       | `.env.local` из примера; проверка Rust для Tauri; флаги `--install-rust`, `--skip-rust` (см. выше) |
+| `npm run dev`         | Режим разработки (веб)                                                                             |
+| `npm run build`       | Сборка продакшена                                                                                  |
+| `npm run start`       | Запуск после сборки                                                                                |
+| `npm run lint`        | ESLint                                                                                             |
+| `npm run test`        | Vitest                                                                                             |
+| `npm run tauri:dev`   | Десктоп (Tauri) в режиме разработки                                                                |
+| `npm run tauri:build` | Сборка десктоп-приложения                                                                          |
+
 
 ## Лицензия
 
@@ -143,7 +153,7 @@ OPENAI_API_KEY=...
 Зависимости (npm, crates.io) имеют **собственные** лицензии — см.
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Поле `"private": true` в [`package.json`](package.json) только предотвращает
+Поле `"private": true` в `[package.json](package.json)` только предотвращает
 случайную публикацию пакета в npm; оно **не** отменяет Apache-2.0 для исходного кода.
 
 После публикации на GitHub имеет смысл заполнить в `package.json` поля

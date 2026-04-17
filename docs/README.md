@@ -1,38 +1,41 @@
 # Документация Tanym
 
-Оглавление технической и организационной документации репозитория.
-
 **Создатель проекта:** Kuralbek Adilet — [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).
 
-## Быстрый старт
+## Веб-документация (3 языка)
 
-| Документ | Содержание |
+В приложении Next.js есть раздел **`/docs`** с переключателем **EN · RU · KK**. По умолчанию — английский (`/docs/en`).
+
+| Действие | URL / путь |
 |----------|------------|
-| [README.md](../README.md) | Установка, запуск, переменные окружения, npm-скрипты |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Стек, структура каталогов, команды разработки |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Подсистемы (редактор, AI, сюжет, Tauri), потоки данных |
+| Dev-сервер | [http://localhost:3000/docs](http://localhost:3000/docs) → редирект на `/docs/en` |
+| Статика после сборки | `out/docs/en/index.html`, `out/docs/ru/…`, `out/docs/kk/…` |
+| Исходники текстов | [content/docs/](../content/docs/) — каталоги `en`, `ru`, `kk` |
 
-## Open source и сообщество
+Оглавление разделов задаётся в [src/lib/docs/registry.ts](../src/lib/docs/registry.ts).
 
-| Документ | Содержание |
+## Файлы в этом каталоге (`docs/`)
+
+Раньше здесь лежали длинные `.md`. **Актуальные тексты** поддерживаются в **`content/docs/{locale}/`**. Ниже — ссылки на юридические и общие файлы в корне репозитория.
+
+| Тема | Файл |
+|------|------|
+| Лицензия | [LICENSE](../LICENSE), [NOTICE](../NOTICE) |
+| Участие | [CONTRIBUTING.md](../CONTRIBUTING.md), [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
+| Безопасность | [SECURITY.md](../SECURITY.md) |
+| История версий | [CHANGELOG.md](../CHANGELOG.md) |
+| Сторонние лицензии | [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) |
+
+## Прочее
+
+| Документ | Примечание |
 |----------|------------|
-| [LICENSE](../LICENSE) | Apache License 2.0 (полный текст) |
-| [NOTICE](../NOTICE) | Атрибуция при распространении (Apache) |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Как участвовать: ветки, PR, тесты, стиль |
-| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Правила поведения в сообществе |
-| [SECURITY.md](../SECURITY.md) | Как сообщить об уязвимости (без публичного issue) |
-| [CHANGELOG.md](../CHANGELOG.md) | История изменений (Keep a Changelog) |
-| [OPEN_SOURCE.md](OPEN_SOURCE.md) | Чеклист мейнтейнеров перед публичным релизом |
-| [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) | Сторонние библиотеки и где смотреть их лицензии |
-
-## Продукт и выпуск
-
-| Документ | Содержание |
-|----------|------------|
-| [DISTRIBUTION.md](DISTRIBUTION.md) | Подпись кода, обновления, дистрибуция Tauri |
-| [PERFORMANCE.md](PERFORMANCE.md) | Чеклист производительности, reflow, тесты |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Краткий указатель; полный текст — `/docs/…/development` |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Краткий указатель; полный текст — `/docs/…/architecture` |
+| [DISTRIBUTION.md](DISTRIBUTION.md) | Краткий указатель; полный текст — `/docs/…/distribution` |
+| [PERFORMANCE.md](PERFORMANCE.md) | Краткий указатель; полный текст — `/docs/…/performance` |
+| [OPEN_SOURCE.md](OPEN_SOURCE.md) | Краткий указатель; полный текст — `/docs/…/open-source` |
 
 ## Шаблоны GitHub
 
-В каталоге [`.github/`](../.github/): шаблон Pull Request и issue templates
-(`bug_report`, `feature_request`).
+В каталоге [`.github/`](../.github/): шаблон Pull Request и issue templates.
