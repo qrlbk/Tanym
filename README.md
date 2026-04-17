@@ -1,66 +1,68 @@
 # Tanym
 
+**Languages:** English (this file) · [Русский](README.ru.md) · [Қазақша](README.kk.md)
+
 [License](LICENSE)
 [Node](package.json)
 
-**AI-редактор для авторов романов и длинной прозы на русском.** Знает ваш проект целиком: персонажей, главы, сцены, противоречия сюжета.
+**An AI-first writing app for novelists and long-form fiction, with Russian as the default authoring language.** It understands your whole project: characters, chapters, scenes, and plot contradictions.
 
-Исходный код распространяется под **Apache License 2.0** — см. [LICENSE](LICENSE) и [NOTICE](NOTICE). Участие в разработке: [CONTRIBUTING.md](CONTRIBUTING.md), этика общения: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+The source code is licensed under **Apache License 2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md), community guidelines: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-## Автор
+## Author
 
-**Kuralbek Adilet** — создатель и ведущий мейнтейнер.  
-Почта: [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).  
-Репозиторий: [github.com/qrlbk/Tanym](https://github.com/qrlbk/Tanym).
+**Kuralbek Adilet** — creator and lead maintainer.  
+Email: [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).  
+Repository: [github.com/qrlbk/Tanym](https://github.com/qrlbk/Tanym).
 
-### Как появился Tanym
+### How Tanym came to be
 
-Проект делает **один разработчик** — я сам пишу код и в работе **активно использую ИИ** (подсказки, рефакторинг, документацию): это честно и нормально для современной инди-разработки; важно, что продукт и архитектура остаются под моим контролем.
+The project is built by **one developer** — I write the code and **actively use AI** in my workflow (suggestions, refactors, docs): that’s normal for modern indie development; what matters is that the product and architecture stay under my control.
 
-Идея родилась просто: когда у меня **закончилась лицензия на Word**, я сначала думал сделать что-то вроде **своей копии Word** — привычный интерфейс, страницы, документы. Но довольно быстро я **переосмыслил задачу**: мне не нужен был ещё один офисный редактор ради офиса. Я хотел **писать миры** — романы, сцены, персонажей, — и чтобы инструмент помогал именно **автору длинной прозы**, а не «оформлял отчёты». Так Tanym стал проектом **для себя**: под мой язык, мой сценарий работы и мою любовь к большим историям. То, что им могут воспользоваться и другие авторы, — приятный бонус open source.
+The idea was simple: when my **Word license expired**, I first thought about building something like **my own Word** — familiar UI, pages, documents. Pretty soon I **reframed the goal**: I didn’t need another office editor for office work. I wanted to **build worlds** — novels, scenes, characters — and I wanted a tool that helps **long-form authors**, not one that “formats reports.” So Tanym became a **personal** project: tuned to my language, my workflow, and my love of big stories. That other writers can use it too is a nice open-source bonus.
 
-Клиент на Next.js (TipTap) со страницами A4, импортом и экспортом DOCX и десктопной оболочкой Tauri. Writer-copilot понимает структуру книги (главы → сцены → персонажи), ищет нестыковки в сюжете и может править любую сцену проекта, а не только открытую.
+The client is Next.js (TipTap) with A4 pages, DOCX import/export, and a Tauri desktop shell. The writer copilot understands book structure (chapters → scenes → characters), finds plot inconsistencies, and can edit any scene in the project — not only the one you have open.
 
-## Чем отличается от Google Docs / Scrivener и классических офисных редакторов
+## How it differs from Google Docs / Scrivener and classic office editors
 
-- **Знает весь проект, а не только открытый файл.** AI видит главы, сцены, карточки персонажей и может править сцены, в которых вас сейчас нет.
-- **Проверяет противоречия сюжета (continuity).** Векторный индекс по тексту и правила-детекторы находят нестыковки между сценами.
-- **Карточки персонажей с AI-апрувом.** Модель предлагает обновления персонажа при появлении новых фактов; вы подтверждаете.
-- **Полностью офлайн через Ollama.** Включите «Полностью офлайн» — и роман не уходит в облако: AI и эмбеддинги считаются локально (Llama 3, Qwen2.5, `nomic-embed-text`). См. `.env.example` и `OLLAMA_BASE_URL`.
-- **Русскоязычный по умолчанию.** Вся терминология, UI и промпты заточены под русский; не требует переучивания с английских Novelcrafter/Sudowrite.
-- **Привычная лента и страницы A4.** Вкладки ленты, разметка страницы, DOCX в обе стороны.
+- **Knows the whole project, not just the open file.** The AI sees chapters, scenes, character cards, and can edit scenes you’re not currently in.
+- **Checks plot continuity.** A vector index over the text plus rule-based detectors surface inconsistencies between scenes.
+- **Character cards with AI approval.** The model suggests character updates when new facts appear; you confirm.
+- **Fully offline via Ollama.** Turn on “Fully offline” and your novel never leaves your machine: AI and embeddings run locally (Llama 3, Qwen2.5, `nomic-embed-text`). See `.env.example` and `OLLAMA_BASE_URL`.
+- **Russian-first by default.** Terminology, UI, and prompts are tuned for Russian; no need to “unlearn” English-centric tools like Novelcrafter/Sudowrite.
+- **Familiar ribbon and A4 pages.** Ribbon tabs, page layout, DOCX both ways.
 
-## Документация
+## Documentation
 
-**Веб-раздел (EN / RU / KK):** после `npm run dev` откройте [http://localhost:3000/docs](http://localhost:3000/docs) (редирект на `/docs/en`). После `npm run build` статика в `out/docs/…`.
+**Web docs (EN / RU / KK):** after `npm run dev`, open [http://localhost:3000/docs](http://localhost:3000/docs) (redirects to `/docs/en`). After `npm run build`, static output is under `out/docs/…`.
 
-| Ресурс | Описание |
-| ------ | -------- |
-| [docs/README.md](docs/README.md) | Оглавление и ссылки на `content/docs` |
-| [content/docs/](content/docs/) | Исходники статей (Markdown по языкам) |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Указатель; полный текст — веб `/docs/…/development` |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Указатель; полный текст — веб `/docs/…/architecture` |
-| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | Указатель; полный текст — веб `/docs/…/distribution` |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Указатель; полный текст — веб `/docs/…/performance` |
-| [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md) | Указатель; полный текст — веб `/docs/…/open-source` |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Как вносить вклад (PR, стиль, тесты) |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Правила сообщества |
-| [SECURITY.md](SECURITY.md) | Сообщения об уязвимостях |
-| [CHANGELOG.md](CHANGELOG.md) | История изменений |
-| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Сторонние компоненты и лицензии |
+| Resource | Description |
+| -------- | ----------- |
+| [docs/README.md](docs/README.md) | Index and links into `content/docs` |
+| [content/docs/](content/docs/) | Article sources (Markdown per locale) |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Pointer; full text on the web at `/docs/…/development` |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pointer; full text on the web at `/docs/…/architecture` |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | Pointer; full text on the web at `/docs/…/distribution` |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Pointer; full text on the web at `/docs/…/performance` |
+| [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md) | Pointer; full text on the web at `/docs/…/open-source` |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (PRs, style, tests) |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community code of conduct |
+| [SECURITY.md](SECURITY.md) | Reporting security issues |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Third-party components and licenses |
 
 
-## Требования
+## Requirements
 
-- **Node.js 20+** и **npm** (версия Node зафиксирована в `[package.json](package.json)` в поле `engines`; при использовании [nvm](https://github.com/nvm-sh/nvm) можно выполнить `nvm use` — в корне есть `[.nvmrc](.nvmrc)`).
-- **Только веб** (браузер): Rust не обязателен.
-- **Десктоп (Tauri)**: [Rust](https://rustup.rs/) не ниже версии из `[src-tauri/Cargo.toml](src-tauri/Cargo.toml)` (`rust-version`), плюс системные зависимости для вашей ОС — см. [официальные prerequisites Tauri v2](https://v2.tauri.app/start/prerequisites/).
+- **Node.js 20+** and **npm** (Node version is pinned in `[package.json](package.json)` under `engines`; with [nvm](https://github.com/nvm-sh/nvm) you can run `nvm use` — there is an `[.nvmrc](.nvmrc)` in the repo root).
+- **Web only** (browser): Rust is not required.
+- **Desktop (Tauri)**: [Rust](https://rustup.rs/) at least the version in `[src-tauri/Cargo.toml](src-tauri/Cargo.toml)` (`rust-version`), plus OS-specific dependencies — see [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-Node.js из репозитория автоматически не ставится: сначала установите его с [nodejs.org](https://nodejs.org/) или через nvm/Homebrew и т.п.
+Node.js is not installed by the repo: install it from [nodejs.org](https://nodejs.org/) or via nvm/Homebrew, etc.
 
-## Установка одной командой
+## One-command setup
 
-После клонирования репозитория из корня проекта:
+From the repo root after cloning:
 
 **macOS / Linux**
 
@@ -68,7 +70,7 @@ Node.js из репозитория автоматически не ставит
 bash setup.sh
 ```
 
-или `./setup.sh`, если файлу выданы права на выполнение (`chmod +x setup.sh`).
+or `./setup.sh` if the file is executable (`chmod +x setup.sh`).
 
 **Windows** (PowerShell)
 
@@ -76,9 +78,9 @@ bash setup.sh
 .\setup.ps1
 ```
 
-Скрипт выполняет `npm install`, затем `[scripts/setup.mjs](scripts/setup.mjs)`: создаёт `.env.local` из `.env.example` (если его ещё нет), проверяет наличие `rustc` нужной версии для Tauri.
+The script runs `npm install`, then `[scripts/setup.mjs](scripts/setup.mjs)`: creates `.env.local` from `.env.example` (if missing) and checks for a suitable `rustc` for Tauri.
 
-Если нужен **только веб** и Rust ставить не планируете, используйте:
+If you only need the **web** app and don’t plan to install Rust:
 
 ```bash
 bash setup.sh --skip-rust
@@ -88,7 +90,7 @@ bash setup.sh --skip-rust
 .\setup.ps1 --skip-rust
 ```
 
-Если Rust не установлен или версия слишком старая, повторите с автоматической установкой **rustup** (меняет систему — официальный установщик с [rustup.rs](https://rustup.rs/)):
+If Rust is missing or too old, rerun with automatic **rustup** install (system-wide — official installer from [rustup.rs](https://rustup.rs/)):
 
 ```bash
 bash setup.sh --install-rust
@@ -98,63 +100,60 @@ bash setup.sh --install-rust
 .\setup.ps1 --install-rust
 ```
 
-Если зависимости npm уже установлены, достаточно:
+If npm dependencies are already installed:
 
 ```bash
 npm run setup
 ```
 
-Аргументы `npm run setup` передаются в скрипт после `--`, например:
+Pass arguments to `npm run setup` after `--`, for example:
 
 - `npm run setup -- --install-rust`
 - `npm run setup -- --skip-rust`
 
-После первой установки rustup иногда нужно **открыть новый терминал**, затем снова `npm run setup`.
+After the first rustup install you may need to **open a new terminal**, then run `npm run setup` again.
 
-## Переменные окружения
+## Environment variables
 
-Файл `.env.local` создаётся при setup из `.env.example`. Подставьте ключ для функций ИИ:
+`.env.local` is created during setup from `.env.example`. Add your key for AI features:
 
 ```bash
 OPENAI_API_KEY=...
 ```
 
-## Запуск (после установки)
+## Running (after setup)
 
 
-| Цель                                                                  | Команда                               |
-| --------------------------------------------------------------------- | ------------------------------------- |
-| Только веб (Next.js в браузере)                                       | `npm run dev`                         |
-| Веб + нативное окно Tauri (dev-сервер Next поднимается автоматически) | `npm run tauri:dev`                   |
-| Продакшен-сборка веба                                                 | `npm run build` затем `npm run start` |
-| Сборка десктопного приложения                                         | `npm run tauri:build`                 |
+| Goal | Command |
+| ---- | ------- |
+| Web only (Next.js in the browser) | `npm run dev` |
+| Web + native Tauri window (Next dev server starts automatically) | `npm run tauri:dev` |
+| Production web build | `npm run build` then `npm run start` |
+| Desktop app build | `npm run tauri:build` |
 
 
-## Скрипты npm
+## npm scripts
 
 
-| Команда               | Описание                                                                                           |
-| --------------------- | -------------------------------------------------------------------------------------------------- |
-| `npm run setup`       | `.env.local` из примера; проверка Rust для Tauri; флаги `--install-rust`, `--skip-rust` (см. выше) |
-| `npm run dev`         | Режим разработки (веб)                                                                             |
-| `npm run build`       | Сборка продакшена                                                                                  |
-| `npm run start`       | Запуск после сборки                                                                                |
-| `npm run lint`        | ESLint                                                                                             |
-| `npm run test`        | Vitest                                                                                             |
-| `npm run tauri:dev`   | Десктоп (Tauri) в режиме разработки                                                                |
-| `npm run tauri:build` | Сборка десктоп-приложения                                                                          |
+| Command | Description |
+| ------- | ----------- |
+| `npm run setup` | `.env.local` from example; Rust check for Tauri; flags `--install-rust`, `--skip-rust` (see above) |
+| `npm run dev` | Development (web) |
+| `npm run build` | Production build |
+| `npm run start` | Run after build |
+| `npm run lint` | ESLint |
+| `npm run test` | Vitest |
+| `npm run tauri:dev` | Desktop (Tauri) in development |
+| `npm run tauri:build` | Build desktop app |
 
 
-## Лицензия
+## License
 
-Исходный код репозитория — **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**.
-Текст лицензии: [LICENSE](LICENSE); атрибуция при распространении: [NOTICE](NOTICE).
+Repository source code is **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**.  
+License text: [LICENSE](LICENSE); attribution when distributing: [NOTICE](NOTICE).
 
-Зависимости (npm, crates.io) имеют **собственные** лицензии — см.
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Dependencies (npm, crates.io) have **their own** licenses — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Поле `"private": true` в `[package.json](package.json)` только предотвращает
-случайную публикацию пакета в npm; оно **не** отменяет Apache-2.0 для исходного кода.
+The `"private": true` field in `[package.json](package.json)` only prevents accidental publishing to npm; it does **not** waive Apache-2.0 for the source.
 
-После публикации на GitHub имеет смысл заполнить в `package.json` поля
-`repository`, `homepage` и `bugs` (см. [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md)).
+After publishing on GitHub, consider filling `repository`, `homepage`, and `bugs` in `package.json` (see [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md)).
