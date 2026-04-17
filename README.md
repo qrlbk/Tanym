@@ -1,38 +1,76 @@
+<div align="center">
+
 # Tanym
 
-**Languages:** English (this file) · [Русский](README.ru.md) · [Қазақша](README.kk.md)
+### AI-native writing studio for novels & long-form fiction
 
-[License](LICENSE)
-[Node](package.json)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![TipTap](https://img.shields.io/badge/editor-TipTap-6B46C1?style=flat-square&logo=tiptap&logoColor=white)](https://tiptap.dev/)
+[![Tauri](https://img.shields.io/badge/desktop-Tauri-FFC131?style=flat-square&logo=tauri&logoColor=black)](https://v2.tauri.app/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-3DA639?style=flat-square&logo=apache&logoColor=white)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?style=flat-square&logo=node.js&logoColor=white)](package.json)
+[![CI](https://img.shields.io/github/actions/workflow/status/qrlbk/Tanym/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white&style=flat-square)](https://github.com/qrlbk/Tanym/actions/workflows/ci.yml)
+
+**English** · [Русский](README.ru.md) · [Қазақша](README.kk.md)
+
+<br/>
+
+</div>
+
+<p align="center">
+  <sub>Default authoring language: <strong>Russian</strong> · Whole-project awareness · Continuity checks · DOCX · Optional full offline (Ollama)</sub>
+</p>
+
+---
+
+## <a id="toc"></a> Contents
+
+[Overview](#overview) · [Author](#author) · [How Tanym came to be](#story) · [What makes it different](#features) · [Documentation](#documentation) · [Requirements](#requirements) · [Setup](#setup) · [Environment](#environment) · [Run](#running) · [npm scripts](#npm-scripts) · [License](#license)
+
+---
+
+## <a id="overview"></a> Overview
 
 **An AI-first writing app for novelists and long-form fiction, with Russian as the default authoring language.** It understands your whole project: characters, chapters, scenes, and plot contradictions.
 
-The source code is licensed under **Apache License 2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md), community guidelines: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+The source code is licensed under **Apache License 2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Community: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-## Author
+---
 
-**Kuralbek Adilet** — creator and lead maintainer.  
-Email: [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).  
-Repository: [github.com/qrlbk/Tanym](https://github.com/qrlbk/Tanym).
+## <a id="author"></a> Author
 
-### How Tanym came to be
+| | |
+| --- | --- |
+| **Maintainer** | **Kuralbek Adilet** |
+| **Email** | [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com) |
+| **Repository** | [github.com/qrlbk/Tanym](https://github.com/qrlbk/Tanym) |
+
+---
+
+## <a id="story"></a> How Tanym came to be
 
 The project is built by **one developer** — I write the code and **actively use AI** in my workflow (suggestions, refactors, docs): that’s normal for modern indie development; what matters is that the product and architecture stay under my control.
 
 The idea was simple: when my **Word license expired**, I first thought about building something like **my own Word** — familiar UI, pages, documents. Pretty soon I **reframed the goal**: I didn’t need another office editor for office work. I wanted to **build worlds** — novels, scenes, characters — and I wanted a tool that helps **long-form authors**, not one that “formats reports.” So Tanym became a **personal** project: tuned to my language, my workflow, and my love of big stories. That other writers can use it too is a nice open-source bonus.
 
-The client is Next.js (TipTap) with A4 pages, DOCX import/export, and a Tauri desktop shell. The writer copilot understands book structure (chapters → scenes → characters), finds plot inconsistencies, and can edit any scene in the project — not only the one you have open.
+The client is **Next.js** (TipTap) with A4 pages, DOCX import/export, and a **Tauri** desktop shell. The writer copilot understands book structure (chapters → scenes → characters), finds plot inconsistencies, and can edit any scene in the project — not only the one you have open.
 
-## How it differs from Google Docs / Scrivener and classic office editors
+---
 
-- **Knows the whole project, not just the open file.** The AI sees chapters, scenes, character cards, and can edit scenes you’re not currently in.
-- **Checks plot continuity.** A vector index over the text plus rule-based detectors surface inconsistencies between scenes.
-- **Character cards with AI approval.** The model suggests character updates when new facts appear; you confirm.
-- **Fully offline via Ollama.** Turn on “Fully offline” and your novel never leaves your machine: AI and embeddings run locally (Llama 3, Qwen2.5, `nomic-embed-text`). See `.env.example` and `OLLAMA_BASE_URL`.
-- **Russian-first by default.** Terminology, UI, and prompts are tuned for Russian; no need to “unlearn” English-centric tools like Novelcrafter/Sudowrite.
-- **Familiar ribbon and A4 pages.** Ribbon tabs, page layout, DOCX both ways.
+## <a id="features"></a> What makes it different
 
-## Documentation
+| | |
+| :--- | :--- |
+| **Whole project, not one file** | The AI sees chapters, scenes, character cards, and can edit scenes you’re not currently in. |
+| **Plot continuity** | Vector index + rule-based detectors surface inconsistencies between scenes. |
+| **Character cards + AI approval** | The model suggests updates when new facts appear; you confirm. |
+| **Full offline (Ollama)** | “Fully offline” keeps your novel local — AI & embeddings on-device (e.g. Llama 3, Qwen2.5, `nomic-embed-text`). See `.env.example` & `OLLAMA_BASE_URL`. |
+| **Russian-first** | Terminology, UI, and prompts tuned for Russian — no “unlearning” English-centric tools. |
+| **Ribbon + A4** | Familiar ribbon, page layout, DOCX both ways. |
+
+---
+
+## <a id="documentation"></a> Documentation
 
 **Web docs (EN / RU / KK):** after `npm run dev`, open [http://localhost:3000/docs](http://localhost:3000/docs) (redirects to `/docs/en`). After `npm run build`, static output is under `out/docs/…`.
 
@@ -40,27 +78,30 @@ The client is Next.js (TipTap) with A4 pages, DOCX import/export, and a Tauri de
 | -------- | ----------- |
 | [docs/README.md](docs/README.md) | Index and links into `content/docs` |
 | [content/docs/](content/docs/) | Article sources (Markdown per locale) |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Pointer; full text on the web at `/docs/…/development` |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pointer; full text on the web at `/docs/…/architecture` |
-| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | Pointer; full text on the web at `/docs/…/distribution` |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Pointer; full text on the web at `/docs/…/performance` |
-| [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md) | Pointer; full text on the web at `/docs/…/open-source` |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Pointer → full text at `/docs/…/development` |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pointer → full text at `/docs/…/architecture` |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) | Pointer → full text at `/docs/…/distribution` |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Pointer → full text at `/docs/…/performance` |
+| [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md) | Pointer → full text at `/docs/…/open-source` |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (PRs, style, tests) |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community code of conduct |
-| [SECURITY.md](SECURITY.md) | Reporting security issues |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Code of conduct |
+| [SECURITY.md](SECURITY.md) | Security disclosures |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Third-party components and licenses |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Third-party licenses |
 
+---
 
-## Requirements
+## <a id="requirements"></a> Requirements
 
-- **Node.js 20+** and **npm** (Node version is pinned in `[package.json](package.json)` under `engines`; with [nvm](https://github.com/nvm-sh/nvm) you can run `nvm use` — there is an `[.nvmrc](.nvmrc)` in the repo root).
-- **Web only** (browser): Rust is not required.
-- **Desktop (Tauri)**: [Rust](https://rustup.rs/) at least the version in `[src-tauri/Cargo.toml](src-tauri/Cargo.toml)` (`rust-version`), plus OS-specific dependencies — see [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
+- **Node.js 20+** and **npm** — version pinned in [`package.json`](package.json) (`engines`); with [nvm](https://github.com/nvm-sh/nvm) run `nvm use` ([`.nvmrc`](.nvmrc) in repo root).
+- **Web only:** Rust not required.
+- **Desktop (Tauri):** [Rust](https://rustup.rs/) ≥ version in [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) (`rust-version`), plus [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
 
-Node.js is not installed by the repo: install it from [nodejs.org](https://nodejs.org/) or via nvm/Homebrew, etc.
+Node is not installed by the repo — get it from [nodejs.org](https://nodejs.org/) or nvm/Homebrew.
 
-## One-command setup
+---
+
+## <a id="setup"></a> One-command setup
 
 From the repo root after cloning:
 
@@ -70,90 +111,89 @@ From the repo root after cloning:
 bash setup.sh
 ```
 
-or `./setup.sh` if the file is executable (`chmod +x setup.sh`).
+or `./setup.sh` if executable (`chmod +x setup.sh`).
 
-**Windows** (PowerShell)
+**Windows (PowerShell)**
 
 ```powershell
 .\setup.ps1
 ```
 
-The script runs `npm install`, then `[scripts/setup.mjs](scripts/setup.mjs)`: creates `.env.local` from `.env.example` (if missing) and checks for a suitable `rustc` for Tauri.
+Runs `npm install`, then [`scripts/setup.mjs`](scripts/setup.mjs): creates `.env.local` from `.env.example` (if missing) and checks `rustc` for Tauri.
 
-If you only need the **web** app and don’t plan to install Rust:
+**Web only** (skip Rust):
 
 ```bash
 bash setup.sh --skip-rust
 ```
-
 ```powershell
 .\setup.ps1 --skip-rust
 ```
 
-If Rust is missing or too old, rerun with automatic **rustup** install (system-wide — official installer from [rustup.rs](https://rustup.rs/)):
+**Install rustup** (if Rust missing/outdated — system-wide installer from [rustup.rs](https://rustup.rs/)):
 
 ```bash
 bash setup.sh --install-rust
 ```
-
 ```powershell
 .\setup.ps1 --install-rust
 ```
 
-If npm dependencies are already installed:
+If `node_modules` already exists:
 
 ```bash
 npm run setup
 ```
 
-Pass arguments to `npm run setup` after `--`, for example:
+Examples: `npm run setup -- --install-rust` · `npm run setup -- --skip-rust`
 
-- `npm run setup -- --install-rust`
-- `npm run setup -- --skip-rust`
+After first rustup install, you may need a **new terminal**, then `npm run setup` again.
 
-After the first rustup install you may need to **open a new terminal**, then run `npm run setup` again.
+---
 
-## Environment variables
+## <a id="environment"></a> Environment variables
 
-`.env.local` is created during setup from `.env.example`. Add your key for AI features:
+`.env.local` is created during setup from `.env.example`. Add your key for AI:
 
 ```bash
 OPENAI_API_KEY=...
 ```
 
-## Running (after setup)
+---
 
+## <a id="running"></a> Running (after setup)
 
 | Goal | Command |
 | ---- | ------- |
-| Web only (Next.js in the browser) | `npm run dev` |
-| Web + native Tauri window (Next dev server starts automatically) | `npm run tauri:dev` |
-| Production web build | `npm run build` then `npm run start` |
-| Desktop app build | `npm run tauri:build` |
+| Web only (Next.js in browser) | `npm run dev` |
+| Web + native Tauri window | `npm run tauri:dev` |
+| Production web | `npm run build` → `npm run start` |
+| Desktop app | `npm run tauri:build` |
 
+---
 
-## npm scripts
-
+## <a id="npm-scripts"></a> npm scripts
 
 | Command | Description |
 | ------- | ----------- |
-| `npm run setup` | `.env.local` from example; Rust check for Tauri; flags `--install-rust`, `--skip-rust` (see above) |
+| `npm run setup` | `.env.local` from example; Rust check; `--install-rust`, `--skip-rust` |
 | `npm run dev` | Development (web) |
 | `npm run build` | Production build |
 | `npm run start` | Run after build |
 | `npm run lint` | ESLint |
 | `npm run test` | Vitest |
-| `npm run tauri:dev` | Desktop (Tauri) in development |
-| `npm run tauri:build` | Build desktop app |
+| `npm run tauri:dev` | Desktop dev |
+| `npm run tauri:build` | Desktop build |
 
+---
 
-## License
+## <a id="license"></a> License
 
 Repository source code is **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**.  
-License text: [LICENSE](LICENSE); attribution when distributing: [NOTICE](NOTICE).
+Texts: [LICENSE](LICENSE) · Attribution: [NOTICE](NOTICE).
 
-Dependencies (npm, crates.io) have **their own** licenses — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Dependencies (npm, crates.io) have **their own** licenses — [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The `"private": true` field in `[package.json](package.json)` only prevents accidental publishing to npm; it does **not** waive Apache-2.0 for the source.
+`"private": true` in [`package.json`](package.json) only blocks accidental npm publish; it does **not** waive Apache-2.0 for the source.
 
-After publishing on GitHub, consider filling `repository`, `homepage`, and `bugs` in `package.json` (see [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md)).
+Consider filling `repository`, `homepage`, and `bugs` in `package.json` (see [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md)).
