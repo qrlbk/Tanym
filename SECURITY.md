@@ -17,8 +17,10 @@ Preferred options (use whichever the project has enabled):
    private thread visible only to reporters and maintainers.
 
 2. **Maintainer contact**  
-   If GitHub private reporting is not available, use the email or process listed
-   in the repository **About** section or maintainer profiles.
+   If GitHub private reporting is not available, write to the project author,
+   **Kuralbek Adilet** — **kuralbekadilet475@gmail.com** (use a clear subject line,
+   e.g. `[Tanym security]`), or use the process listed in the repository **About**
+   section.
 
 ### What to include
 

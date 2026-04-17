@@ -3,6 +3,8 @@
 This page helps **maintainers** ship Tanym as a credible open-source product:
 licensing, metadata, and release hygiene.
 
+**Primary maintainer:** Kuralbek Adilet — [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).
+
 ## License stack
 
 | Artifact | License |

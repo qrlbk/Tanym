@@ -2,7 +2,7 @@
 name = "app"
 version = "0.1.0"
 description = "Tanym — редактор для авторов (Next.js + Tauri)"
-authors = ["Tanym"]
+authors = ["Kuralbek Adilet <kuralbekadilet475@gmail.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/qrlbk/Tanym"
 edition = "2021"

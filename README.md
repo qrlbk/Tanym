@@ -7,6 +7,12 @@
 
 Исходный код распространяется под **Apache License 2.0** — см. [LICENSE](LICENSE) и [NOTICE](NOTICE). Участие в разработке: [CONTRIBUTING.md](CONTRIBUTING.md), этика общения: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
+## Автор
+
+**Kuralbek Adilet** — создатель и ведущий мейнтейнер.  
+Почта: [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).  
+Репозиторий: [github.com/qrlbk/Tanym](https://github.com/qrlbk/Tanym).
+
 Клиент на Next.js (TipTap) со страницами A4, импортом и экспортом DOCX и десктопной оболочкой Tauri. Writer-copilot понимает структуру книги (главы → сцены → персонажи), ищет нестыковки в сюжете и может править любую сцену проекта, а не только открытую.
 
 ## Чем отличается от Google Docs / Scrivener и классических офисных редакторов

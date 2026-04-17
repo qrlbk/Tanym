@@ -2,6 +2,8 @@
 
 Оглавление технической и организационной документации репозитория.
 
+**Создатель проекта:** Kuralbek Adilet — [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).
+
 ## Быстрый старт
 
 | Документ | Содержание |

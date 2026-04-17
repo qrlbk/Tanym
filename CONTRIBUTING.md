@@ -72,6 +72,10 @@ Release announcements and casual author discussions may move to Telegram /
 Discord over time; when links exist, they will appear in the README. Until
 then, GitHub Issues and Discussions (if enabled) are the main channels.
 
+## Maintainer
+
+Primary maintainer: **Kuralbek Adilet** — [kuralbekadilet475@gmail.com](mailto:kuralbekadilet475@gmail.com).
+
 ## Questions
 
 If something in the docs is unclear after reading [README.md](README.md) and
