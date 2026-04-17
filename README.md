@@ -53,7 +53,7 @@ The project is built by **one developer** — I write the code and **actively us
 
 The idea was simple: when my **Word license expired**, I first thought about building something like **my own Word** — familiar UI, pages, documents. Pretty soon I **reframed the goal**: I didn’t need another office editor for office work. I wanted to **build worlds** — novels, scenes, characters — and I wanted a tool that helps **long-form authors**, not one that “formats reports.” So Tanym became a **personal** project: tuned to my language, my workflow, and my love of big stories. That other writers can use it too is a nice open-source bonus.
 
-The client is **Next.js** (TipTap) with A4 pages, DOCX import/export, and a **Tauri** desktop shell. The writer copilot understands book structure (chapters → scenes → characters), finds plot inconsistencies, and can edit any scene in the project — not only the one you have open.
+The client is **Next.js** (TipTap) with a ribbon-style editor, DOCX import/export, and a **Tauri** desktop shell. The writer copilot understands book structure (chapters → scenes → characters), finds plot inconsistencies, and can edit any scene in the project — not only the one you have open.
 
 ---
 
@@ -66,7 +66,7 @@ The client is **Next.js** (TipTap) with A4 pages, DOCX import/export, and a **Ta
 | **Character cards + AI approval** | The model suggests updates when new facts appear; you confirm. |
 | **Full offline (Ollama)** | “Fully offline” keeps your novel local — AI & embeddings on-device (e.g. Llama 3, Qwen2.5, `nomic-embed-text`). See `.env.example` & `OLLAMA_BASE_URL`. |
 | **Russian-first** | Terminology, UI, and prompts tuned for Russian — no “unlearning” English-centric tools. |
-| **Ribbon + A4** | Familiar ribbon, page layout, DOCX both ways. |
+| **Ribbon + DOCX** | Familiar ribbon UI, round-trip DOCX. |
 
 ---
 
