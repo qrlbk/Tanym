@@ -125,9 +125,9 @@ export async function saveDocxExplicit(
       }
       useDocumentStore.getState().setActiveDocxPath(path);
     }
-    const ok = await tauriWriteFile(path, bytes);
-    if (!ok) {
-      return { ok: false, reason: "write_failed" };
+    const writeResult = await tauriWriteFile(path, bytes);
+    if (!writeResult.ok) {
+      return { ok: false, reason: writeResult.message };
     }
     addRecentFilePath(path);
   } else {

@@ -83,6 +83,7 @@ function dedupeWarnings(warnings: ConsistencyWarning[]): ConsistencyWarning[] {
 
 function debugWarningStats(scope: string, warnings: ConsistencyWarning[]): void {
   if (process.env.NODE_ENV !== "development") return;
+  if (warnings.length === 0) return;
   const stats = warnings.reduce<Record<string, number>>((acc, warning) => {
     acc[warning.source] = (acc[warning.source] ?? 0) + 1;
     return acc;

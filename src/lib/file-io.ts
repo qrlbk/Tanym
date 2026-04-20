@@ -355,7 +355,10 @@ export async function exportToDocx(editor: Editor, filename: string) {
     const path = await tauriSaveDialog(safeName);
     if (path) {
       const buf = new Uint8Array(await blob.arrayBuffer());
-      await tauriWriteFile(path, buf);
+      const wr = await tauriWriteFile(path, buf);
+      if (!wr.ok) {
+        console.warn("exportToDocx: write failed", wr.message);
+      }
     }
   } else {
     saveAs(blob, safeName);
@@ -369,7 +372,10 @@ export async function exportProjectToDocx(project: StoryProject, filename: strin
     const path = await tauriSaveDialog(safeName);
     if (path) {
       const buf = new Uint8Array(await blob.arrayBuffer());
-      await tauriWriteFile(path, buf);
+      const wr = await tauriWriteFile(path, buf);
+      if (!wr.ok) {
+        console.warn("exportProjectToDocx: write failed", wr.message);
+      }
     }
   } else {
     saveAs(blob, safeName);

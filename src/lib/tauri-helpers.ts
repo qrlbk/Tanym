@@ -45,16 +45,21 @@ export async function tauriReadFile(
   }
 }
 
+export type TauriWriteFileResult =
+  | { ok: true }
+  | { ok: false; message: string };
+
 export async function tauriWriteFile(
   path: string,
-  data: Uint8Array
-): Promise<boolean> {
-  if (!isTauri()) return false;
+  data: Uint8Array,
+): Promise<TauriWriteFileResult> {
+  if (!isTauri()) return { ok: false, message: "not_tauri" };
   try {
     const { writeFile } = await import("@tauri-apps/plugin-fs");
     await writeFile(path, data);
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: message || "write_failed" };
   }
 }

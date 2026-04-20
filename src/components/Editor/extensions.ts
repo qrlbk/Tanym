@@ -85,6 +85,9 @@ export function getExtensions(options?: { paged?: boolean }) {
     StarterKit.configure({
       document: paged ? false : undefined,
       heading: { levels: [1, 2, 3, 4, 5, 6] },
+      // Starter Kit уже подключает link и underline; иначе дубликаты и предупреждение TipTap.
+      link: false,
+      underline: false,
     }),
     Underline,
     TextAlign.configure({
