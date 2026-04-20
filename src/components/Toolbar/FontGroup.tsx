@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useAnchoredDropdownLayout } from "@/components/ui/PortalDropdown";
 import { useEditorState } from "@tiptap/react";
 import {
   Bold,
@@ -64,16 +65,6 @@ function ToolBtn({
   );
 }
 
-function useDropdownPosition(anchorRef: React.RefObject<HTMLElement | null>, isOpen: boolean) {
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
-  useEffect(() => {
-    if (!isOpen || !anchorRef.current) return;
-    const rect = anchorRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-  }, [isOpen, anchorRef]);
-  return pos;
-}
-
 function PortalDropdownDark({
   anchorRef,
   isOpen,
@@ -90,7 +81,12 @@ function PortalDropdownDark({
   maxHeight?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pos = useDropdownPosition(anchorRef, isOpen);
+  const layout = useAnchoredDropdownLayout(anchorRef, isOpen, {
+    panelWidth: width,
+    maxHeight,
+    flipThreshold: 120,
+    anchorGap: 4,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -108,18 +104,9 @@ function PortalDropdownDark({
     return () => document.removeEventListener("mousedown", handler);
   }, [isOpen, onClose, anchorRef]);
 
-  if (!isOpen || typeof window === "undefined") return null;
+  if (!isOpen || typeof window === "undefined" || !layout) return null;
 
-  const spaceBelow = window.innerHeight - pos.top - 8;
-  const flipUp = spaceBelow < 120;
-  let top = pos.top;
-  let finalMaxH = Math.min(maxHeight, Math.max(120, spaceBelow));
-
-  if (flipUp && anchorRef.current) {
-    const rect = anchorRef.current.getBoundingClientRect();
-    top = rect.top - 4;
-    finalMaxH = Math.min(maxHeight, Math.max(120, rect.top - 8));
-  }
+  const { top, left, flipUp, finalMaxH } = layout;
 
   return createPortal(
     <div
@@ -129,7 +116,7 @@ function PortalDropdownDark({
         position: "fixed",
         top: flipUp ? undefined : top,
         bottom: flipUp ? window.innerHeight - top + 4 : undefined,
-        left: pos.left,
+        left,
         width,
         maxHeight: finalMaxH,
         zIndex: 10050,
@@ -154,7 +141,12 @@ function ColorPickerPortal({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pos = useDropdownPosition(anchorRef, true);
+  const layout = useAnchoredDropdownLayout(anchorRef, true, {
+    panelWidth: 220,
+    maxHeight: 400,
+    flipThreshold: 180,
+    anchorGap: 4,
+  });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -171,16 +163,9 @@ function ColorPickerPortal({
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose, anchorRef]);
 
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || !layout) return null;
 
-  const maxH = window.innerHeight - pos.top - 8;
-  const flipUp = maxH < 180;
-  let top = pos.top;
-
-  if (flipUp && anchorRef.current) {
-    const rect = anchorRef.current.getBoundingClientRect();
-    top = rect.top - 4;
-  }
+  const { top, left, flipUp } = layout;
 
   return createPortal(
     <div
@@ -190,7 +175,7 @@ function ColorPickerPortal({
         position: "fixed",
         top: flipUp ? undefined : top,
         bottom: flipUp ? window.innerHeight - top : undefined,
-        left: pos.left,
+        left,
         width: 220,
         zIndex: 10050,
         borderColor: UI_COLORS.shellBorder,
@@ -225,6 +210,7 @@ export default function FontGroup() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const [fontQuery, setFontQuery] = useState("");
+  const [fontDropdownWidth, setFontDropdownWidth] = useState(220);
 
   const fontTriggerRef = useRef<HTMLButtonElement>(null);
   const sizeRef = useRef<HTMLDivElement>(null);
@@ -285,6 +271,11 @@ export default function FontGroup() {
     });
   }, [fontQuery, showFontDropdown, scrollTargetFont]);
 
+  useLayoutEffect(() => {
+    if (!showFontDropdown || !fontTriggerRef.current) return;
+    setFontDropdownWidth(Math.max(220, fontTriggerRef.current.offsetWidth));
+  }, [showFontDropdown]);
+
   const openFontPicker = useCallback(() => {
     setFontQuery("");
     setShowFontDropdown(true);
@@ -339,7 +330,7 @@ export default function FontGroup() {
               setFontQuery("");
               setShowFontDropdown(false);
             }}
-            width={Math.max(220, fontTriggerRef.current?.offsetWidth ?? 220)}
+            width={fontDropdownWidth}
             maxHeight={320}
           >
             <div className="sticky top-0 z-[1] border-b px-2 pb-2 pt-1" style={{ borderColor: UI_COLORS.shellBorder, background: UI_COLORS.shellBgElevated }}>

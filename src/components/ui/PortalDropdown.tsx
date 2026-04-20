@@ -1,17 +1,67 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { UI_COLORS } from "@/lib/theme/colors";
 
-function useAnchorPos(anchorRef: React.RefObject<HTMLElement | null>, isOpen: boolean) {
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, anchorH: 0 });
-  useEffect(() => {
-    if (!isOpen || !anchorRef.current) return;
+export type AnchoredDropdownLayout = {
+  top: number;
+  left: number;
+  flipUp: boolean;
+  finalMaxH: number;
+};
+
+/**
+ * Measures anchor position in layout effect (not during render) so eslint react-hooks/refs is satisfied.
+ */
+export function useAnchoredDropdownLayout(
+  anchorRef: React.RefObject<HTMLElement | null>,
+  active: boolean,
+  {
+    panelWidth,
+    maxHeight,
+    flipThreshold,
+    anchorGap = 2,
+  }: {
+    panelWidth: number;
+    maxHeight: number;
+    flipThreshold: number;
+    anchorGap?: number;
+  },
+): AnchoredDropdownLayout | null {
+  const [layout, setLayout] = useState<AnchoredDropdownLayout | null>(null);
+
+  useLayoutEffect(() => {
+    /* Layout measurement for fixed positioning; setState here is intentional (before paint). */
+    /* eslint-disable react-hooks/set-state-in-effect -- portal anchor geometry */
+    if (!active || typeof window === "undefined" || !anchorRef.current) {
+      setLayout(null);
+      return;
+    }
     const rect = anchorRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 2, left: rect.left, width: rect.width, anchorH: rect.height });
-  }, [isOpen, anchorRef]);
-  return pos;
+    const posTop = rect.bottom + anchorGap;
+    const spaceBelow = window.innerHeight - posTop - 8;
+    const flipUp = spaceBelow < flipThreshold;
+    let top = posTop;
+    let finalMaxH = Math.min(maxHeight, Math.max(100, spaceBelow));
+    if (flipUp) {
+      top = rect.top - anchorGap;
+      finalMaxH = Math.min(maxHeight, Math.max(100, rect.top - 8));
+    }
+    let left = rect.left;
+    if (left + panelWidth > window.innerWidth - 8) {
+      left = window.innerWidth - panelWidth - 8;
+    }
+    setLayout({
+      top,
+      left: Math.max(4, left),
+      flipUp,
+      finalMaxH,
+    });
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [active, anchorRef, panelWidth, maxHeight, flipThreshold, anchorGap]);
+
+  return layout;
 }
 
 export function PortalDropdown({
@@ -32,7 +82,12 @@ export function PortalDropdown({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pos = useAnchorPos(anchorRef, isOpen);
+  const layout = useAnchoredDropdownLayout(anchorRef, isOpen, {
+    panelWidth: width,
+    maxHeight,
+    flipThreshold: 120,
+    anchorGap: 2,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -48,23 +103,9 @@ export function PortalDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [isOpen, onClose, anchorRef]);
 
-  if (!isOpen || typeof window === "undefined") return null;
+  if (!isOpen || typeof window === "undefined" || !layout) return null;
 
-  const spaceBelow = window.innerHeight - pos.top - 8;
-  const flipUp = spaceBelow < 120;
-  let top = pos.top;
-  let finalMaxH = Math.min(maxHeight, Math.max(100, spaceBelow));
-
-  if (flipUp && anchorRef.current) {
-    const rect = anchorRef.current.getBoundingClientRect();
-    top = rect.top - 2;
-    finalMaxH = Math.min(maxHeight, rect.top - 8);
-  }
-
-  let left = pos.left;
-  if (left + width > window.innerWidth - 8) {
-    left = window.innerWidth - width - 8;
-  }
+  const { top, left, flipUp, finalMaxH } = layout;
 
   const panelStyle =
     variant === "dark"
@@ -87,7 +128,7 @@ export function PortalDropdown({
         position: "fixed",
         top: flipUp ? undefined : top,
         bottom: flipUp ? window.innerHeight - top : undefined,
-        left: Math.max(4, left),
+        left,
         width,
         maxHeight: finalMaxH,
         zIndex: 10050,
@@ -96,7 +137,7 @@ export function PortalDropdown({
     >
       {children}
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -112,7 +153,12 @@ export function PortalColorPicker({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pos = useAnchorPos(anchorRef, true);
+  const layout = useAnchoredDropdownLayout(anchorRef, true, {
+    panelWidth: 220,
+    maxHeight: 400,
+    flipThreshold: 180,
+    anchorGap: 2,
+  });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -127,17 +173,9 @@ export function PortalColorPicker({
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose, anchorRef]);
 
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || !layout) return null;
 
-  const spaceBelow = window.innerHeight - pos.top - 8;
-  const flipUp = spaceBelow < 180;
-  let top = pos.top;
-  if (flipUp && anchorRef.current) {
-    const rect = anchorRef.current.getBoundingClientRect();
-    top = rect.top - 2;
-  }
-  let left = pos.left;
-  if (left + 220 > window.innerWidth - 8) left = window.innerWidth - 228;
+  const { top, left, flipUp } = layout;
 
   return createPortal(
     <div
@@ -147,7 +185,7 @@ export function PortalColorPicker({
         position: "fixed",
         top: flipUp ? undefined : top,
         bottom: flipUp ? window.innerHeight - top : undefined,
-        left: Math.max(4, left),
+        left,
         width: 220,
         zIndex: 9999,
       }}
@@ -163,6 +201,6 @@ export function PortalColorPicker({
         ))}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

@@ -24,7 +24,6 @@ import { usePlotIndexStore } from "@/stores/plotIndexStore";
 import { usePlotStoryStore } from "@/stores/plotStoryStore";
 import { executeToolCall } from "@/lib/ai/client-tools";
 import { THEME, UI_COLORS } from "@/lib/theme/colors";
-import { useProjectStore } from "@/stores/projectStore";
 import CharacterCardsPanel from "@/components/PlotStory/CharacterCardsPanel";
 import {
   getConflictStrictness,
@@ -122,7 +121,7 @@ export default function PlotStoryPanel({
 
   useEffect(() => {
     if (activeSceneId) {
-      setTab("conflicts");
+      queueMicrotask(() => setTab("conflicts"));
     }
   }, [activeSceneId]);
 

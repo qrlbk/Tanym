@@ -36,7 +36,7 @@ export default function WelcomeHome() {
   const [recentTick, setRecentTick] = useState(0);
 
   useEffect(() => {
-    setInTauri(isTauri());
+    queueMicrotask(() => setInTauri(isTauri()));
   }, []);
 
   const recent = useMemo(() => getRecentFilePaths(), [recentTick, inTauri]);

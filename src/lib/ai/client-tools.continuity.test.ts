@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Editor } from "@tiptap/react";
-import type { PlotChunk } from "@/lib/plot-index/chunks";
 import { executeToolCall } from "./client-tools";
 import { usePlotStoryStore, type ContinuityFixSuggestion } from "@/stores/plotStoryStore";
 import { useProjectStore } from "@/stores/projectStore";

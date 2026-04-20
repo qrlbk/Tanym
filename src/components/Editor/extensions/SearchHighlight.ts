@@ -70,7 +70,7 @@ export const SearchHighlight = Extension.create({
   },
 
   addProseMirrorPlugins() {
-    const extension = this;
+    const storage = this.storage;
     return [
       new Plugin({
         key: searchHighlightKey,
@@ -78,9 +78,9 @@ export const SearchHighlight = Extension.create({
           init: (_, { doc }) =>
             buildDecorationSet(
               doc,
-              extension.storage.query,
-              extension.storage.matchCase,
-              extension.storage.wholeWord,
+              storage.query,
+              storage.matchCase,
+              storage.wholeWord,
             ),
           apply(tr, prev, _oldState, newState) {
             if (!tr.docChanged && !tr.getMeta(SEARCH_HIGHLIGHT_UPDATE)) {
@@ -88,9 +88,9 @@ export const SearchHighlight = Extension.create({
             }
             return buildDecorationSet(
               newState.doc,
-              extension.storage.query,
-              extension.storage.matchCase,
-              extension.storage.wholeWord,
+              storage.query,
+              storage.matchCase,
+              storage.wholeWord,
             );
           },
         },

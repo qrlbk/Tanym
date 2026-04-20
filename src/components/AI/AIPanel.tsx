@@ -200,6 +200,8 @@ export default function AIPanel({
 
   const chatTransport = useMemo(
     () =>
+      // Refs are read only when a request is prepared (async), not during render.
+      // eslint-disable-next-line react-hooks/refs -- prepareSendMessagesRequest runs at send time
       new DefaultChatTransport({
         api: "/api/ai/chat",
         prepareSendMessagesRequest: async ({

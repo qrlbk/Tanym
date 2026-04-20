@@ -45,8 +45,10 @@ export default function FindReplaceDialog() {
     if (!show) return;
     const seed = useUIStore.getState().findSeedText;
     if (seed != null && seed !== "") {
-      setFindText(seed);
-      setFindSeedText(null);
+      queueMicrotask(() => {
+        setFindText(seed);
+        setFindSeedText(null);
+      });
     }
     requestAnimationFrame(() => {
       findInputRef.current?.focus();
@@ -72,11 +74,13 @@ export default function FindReplaceDialog() {
       matchCase,
       wholeWord,
     );
-    setMatchCount(positions.length);
-    setCurrentMatch((c) => {
-      if (positions.length === 0) return 0;
-      if (c === 0) return 1;
-      return Math.min(c, positions.length);
+    queueMicrotask(() => {
+      setMatchCount(positions.length);
+      setCurrentMatch((c) => {
+        if (positions.length === 0) return 0;
+        if (c === 0) return 1;
+        return Math.min(c, positions.length);
+      });
     });
   }, [editor, findText, matchCase, wholeWord]);
 

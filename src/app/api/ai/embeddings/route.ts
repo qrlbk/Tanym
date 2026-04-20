@@ -14,7 +14,7 @@ const MAX_CHARS = 8000;
  *
  * Модель Ollama задаётся через `EMBEDDINGS_MODEL` (default: `nomic-embed-text`).
  */
-function useLocalEmbeddings(): boolean {
+function isOllamaEmbeddingsBackend(): boolean {
   const backend = process.env.EMBEDDINGS_BACKEND?.toLowerCase();
   return backend === "ollama" || backend === "local";
 }
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const blocked = enforceRateLimit(req, "embeddings", 120, 60_000);
   if (blocked) return blocked;
 
-  const localMode = useLocalEmbeddings();
+  const localMode = isOllamaEmbeddingsBackend();
 
   if (!localMode && !process.env.OPENAI_API_KEY) {
     return NextResponse.json(

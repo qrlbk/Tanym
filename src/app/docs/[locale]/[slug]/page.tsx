@@ -9,7 +9,6 @@ import { loadDocMarkdown } from "@/lib/docs/load-doc";
 import {
   DOC_NAV,
   DOCS_LOCALES,
-  type DocSlug,
   getNavItem,
   isDocSlug,
 } from "@/lib/docs/registry";
@@ -54,7 +53,6 @@ export default async function DocsArticlePage({
     notFound();
   }
 
-  const nav = getNavItem(slug);
   const fallbackBanner =
     loaded.usedFallback && loaded.sourceLocale === "en" && locale !== "en" ? (
       <div
