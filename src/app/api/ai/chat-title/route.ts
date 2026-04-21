@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getProvider } from "@/lib/ai/providers";
+import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
 
 const MAX_USER = 2000;
 const MAX_ASSISTANT = 1500;
@@ -34,11 +35,12 @@ export async function POST(req: Request) {
       : assistantPreview;
 
   const provider = getProvider(providerId);
-  if (!process.env[provider.envVar]) {
+  const resolved = await resolveProviderModel(provider);
+  if (!resolved.model) {
     return Response.json({ title: "Новый чат" });
   }
   const { text } = await generateText({
-    model: provider.createModel(),
+    model: resolved.model,
     system:
       "You name chat conversations for a novel-writing app. Output exactly one short title in Russian: 3–6 words. " +
       "No quotes, no prefix like «Чат» or «Chat», no trailing punctuation. " +

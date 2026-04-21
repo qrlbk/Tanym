@@ -178,6 +178,14 @@ After first rustup install, you may need a **new terminal**, then `npm run setup
 OPENAI_API_KEY=...
 ```
 
+### Desktop key storage (Tauri)
+
+In desktop builds you can set OpenAI/Anthropic/Google keys from **File -> AI key settings**.
+
+- Keys are stored locally in the OS keychain.
+- Keys are not written to project files, `localStorage`, or IndexedDB.
+- Use `.env.local` only if you prefer file-based local development setup.
+
 ---
 
 ##  Running (after setup)

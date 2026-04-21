@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getProvider } from "@/lib/ai/providers";
+import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
 
 const MAX_INPUT_CHARS = 8_000;
 const MAX_OUTPUT_CHARS = 320;
@@ -19,17 +20,17 @@ export async function POST(req: Request) {
   if (!body) {
     return Response.json({ summary: null });
   }
-  if (!process.env.OPENAI_API_KEY) {
+  const provider = getProvider(providerId ?? "openai-gpt4o-mini");
+  const resolved = await resolveProviderModel(provider);
+  if (!resolved.model && resolved.missingKeyEnvVar) {
     return Response.json(
-      { error: "OPENAI_API_KEY is not configured on the server." },
+      { error: `${resolved.missingKeyEnvVar} is not configured on the server.` },
       { status: 503 },
     );
   }
-
-  const provider = getProvider(providerId ?? "openai-gpt4o-mini");
   try {
     const { text: summary } = await generateText({
-      model: provider.createModel(),
+      model: resolved.model!,
       system:
         "You write ultra-short scene synopses for a novelist's project index. " +
         "Output exactly ONE sentence in the language of the manuscript (default Russian). " +

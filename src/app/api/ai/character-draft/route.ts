@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { getProvider } from "@/lib/ai/providers";
 import type { CharacterSectionKey } from "@/lib/project/types";
+import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
 
 const KEYS: CharacterSectionKey[] = [
   "appearance",
@@ -77,14 +78,15 @@ export async function POST(req: Request) {
   }
 
   const provider = getProvider(providerId);
-  if (!process.env[provider.envVar]) {
+  const resolved = await resolveProviderModel(provider);
+  if (!resolved.model && resolved.missingKeyEnvVar) {
     return Response.json(
-      { error: `${provider.envVar} is not configured on the server.` },
+      { error: `${resolved.missingKeyEnvVar} is not configured on the server.` },
       { status: 503 },
     );
   }
   const { text } = await generateText({
-    model: provider.createModel(),
+    model: resolved.model!,
     system: systemPromptForMode(mode),
     prompt: userPrompt({ displayName, mode, factsBlob, excerptsBlob }),
   });

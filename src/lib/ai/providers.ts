@@ -1,6 +1,6 @@
 import { openai, createOpenAI } from "@ai-sdk/openai";
-import { anthropic } from "@ai-sdk/anthropic";
-import { google } from "@ai-sdk/google";
+import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { google, createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 
 export type ProviderFamily = "openai" | "anthropic" | "google" | "local-ollama";
@@ -188,6 +188,64 @@ export function isProviderKeyMissing(p: ProviderOption): boolean {
 
 export function isLocalProvider(p: ProviderOption): boolean {
   return p.family === "local-ollama";
+}
+
+export function requiresProviderApiKey(p: ProviderOption): boolean {
+  return p.family !== "local-ollama";
+}
+
+function modelIdForProvider(id: ProviderId): string {
+  switch (id) {
+    case "openai-gpt4o-mini":
+      return "gpt-4o-mini";
+    case "openai-gpt4o":
+      return "gpt-4o";
+    case "openai-gpt5":
+      return "gpt-5";
+    case "openai-o3-mini":
+      return "o3-mini";
+    case "openai-o4-mini":
+      return "o4-mini";
+    case "anthropic-sonnet-4-5":
+      return "claude-sonnet-4-5";
+    case "anthropic-opus-4-1":
+      return "claude-opus-4-1";
+    case "google-gemini-2-5-pro":
+      return "gemini-2.5-pro";
+    case "google-gemini-2-5-flash":
+      return "gemini-2.5-flash";
+    case "local-ollama-llama3":
+      return "llama3";
+    case "local-ollama-qwen2":
+      return "qwen2.5";
+    case "local-ollama-custom":
+      return (
+        (typeof process !== "undefined" && process.env?.OLLAMA_MODEL) || "llama3"
+      );
+  }
+}
+
+export function createModelWithApiKey(
+  provider: ProviderOption,
+  apiKey: string | null,
+): LanguageModel {
+  if (provider.family === "local-ollama") {
+    return provider.createModel();
+  }
+  if (!apiKey) {
+    return provider.createModel();
+  }
+  const modelId = modelIdForProvider(provider.id);
+  switch (provider.family) {
+    case "openai":
+      return createOpenAI({ apiKey })(modelId);
+    case "anthropic":
+      return createAnthropic({ apiKey })(modelId);
+    case "google":
+      return createGoogleGenerativeAI({ apiKey })(modelId);
+    default:
+      return provider.createModel();
+  }
 }
 
 /** Decide which provider to use for a given task when no explicit choice. */

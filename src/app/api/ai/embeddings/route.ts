@@ -1,8 +1,9 @@
 import { embedMany } from "ai";
-import { openai, createOpenAI } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { NextResponse } from "next/server";
 import { enforceRateLimit } from "@/app/api/ai/_shared/rate-limit";
 import { OLLAMA_BASE_URL } from "@/lib/ai/providers";
+import { getProviderSecret } from "@/app/api/ai/_shared/secrets";
 
 const MAX_VALUES = 64;
 const MAX_CHARS = 8000;
@@ -24,8 +25,11 @@ export async function POST(req: Request) {
   if (blocked) return blocked;
 
   const localMode = isOllamaEmbeddingsBackend();
+  const openAiApiKey = localMode
+    ? null
+    : await getProviderSecret("OPENAI_API_KEY");
 
-  if (!localMode && !process.env.OPENAI_API_KEY) {
+  if (!localMode && !openAiApiKey) {
     return NextResponse.json(
       {
         error:
@@ -75,7 +79,7 @@ export async function POST(req: Request) {
           baseURL: `${OLLAMA_BASE_URL.replace(/\/$/, "")}/v1`,
           apiKey: "ollama",
         }).embedding(modelName)
-      : openai.embedding(modelName);
+      : createOpenAI({ apiKey: openAiApiKey! }).embedding(modelName);
 
     const { embeddings } = await embedMany({
       model,

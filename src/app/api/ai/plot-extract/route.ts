@@ -1,7 +1,8 @@
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getProvider } from "@/lib/ai/providers";
+import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
 
 const chunkSchema = z.object({
   id: z.string(),
@@ -96,13 +97,6 @@ function batchChunks(
 }
 
 export async function POST(req: Request) {
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY is not set." },
-      { status: 503 },
-    );
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -110,11 +104,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = z.object({ chunks: z.array(chunkSchema) }).safeParse(body);
+  const parsed = z
+    .object({
+      chunks: z.array(chunkSchema),
+      providerId: z.string().optional(),
+    })
+    .safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Expected { chunks: { id, text }[] }" },
       { status: 400 },
+    );
+  }
+
+  const provider = getProvider(parsed.data.providerId ?? "openai-gpt4o-mini");
+  const resolved = await resolveProviderModel(provider);
+  if (!resolved.model && resolved.missingKeyEnvVar) {
+    return NextResponse.json(
+      { error: `${resolved.missingKeyEnvVar} is not configured on the server.` },
+      { status: 503 },
     );
   }
 
@@ -147,7 +155,7 @@ export async function POST(req: Request) {
         .join("\n\n");
 
       const { object } = await generateObject({
-        model: openai("gpt-4o-mini"),
+        model: resolved.model!,
         schema: batchResultSchema,
         temperature: 0,
         maxOutputTokens: 1200,

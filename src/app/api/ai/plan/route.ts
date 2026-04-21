@@ -6,6 +6,7 @@ import {
   type ProjectContextPayload,
 } from "@/lib/ai/project-context";
 import { enforceRateLimit } from "@/app/api/ai/_shared/rate-limit";
+import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
 
 const MAX_INSTRUCTION_CHARS = 8_000;
 const MAX_PROJECT_CONTEXT_CHARS = 40_000;
@@ -55,10 +56,11 @@ export async function POST(req: Request) {
 
   // Prefer explicit user choice, else router picks a reasoning model.
   const provider = providerId ? getProvider(providerId) : pickModelFor("planner");
-  if (!process.env[provider.envVar]) {
+  const resolved = await resolveProviderModel(provider);
+  if (!resolved.model && resolved.missingKeyEnvVar) {
     return Response.json(
       {
-        error: `${provider.envVar} is not configured on the server.`,
+        error: `${resolved.missingKeyEnvVar} is not configured on the server.`,
       },
       { status: 503 },
     );
@@ -66,7 +68,7 @@ export async function POST(req: Request) {
 
   try {
     const { object } = await generateObject({
-      model: provider.createModel(),
+      model: resolved.model!,
       schema: planSchema,
       temperature: 0.2,
       system:

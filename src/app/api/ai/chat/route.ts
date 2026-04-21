@@ -7,6 +7,7 @@ import {
   type ProjectContextPayload,
 } from "@/lib/ai/project-context";
 import { enforceRateLimit } from "@/app/api/ai/_shared/rate-limit";
+import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
 
 const MAX_EDITOR_CONTEXT_CHARS = 120_000;
 const MAX_CHARACTER_CONTEXT_CHARS = 32_000;
@@ -91,10 +92,11 @@ export async function POST(req: Request) {
   } = await req.json();
 
   const provider = getProvider(providerId ?? "openai-gpt4o-mini");
-  if (!process.env[provider.envVar]) {
+  const resolved = await resolveProviderModel(provider);
+  if (!resolved.model && resolved.missingKeyEnvVar) {
     return Response.json(
       {
-        error: `${provider.envVar} is not configured on the server.`,
+        error: `${resolved.missingKeyEnvVar} is not configured on the server.`,
       },
       { status: 503 },
     );
@@ -112,7 +114,7 @@ export async function POST(req: Request) {
     characterContextToSystemAppend(characterContext);
 
   const result = streamText({
-    model: provider.createModel(),
+    model: resolved.model!,
     system,
     messages: modelMessages,
     tools: serverTools,

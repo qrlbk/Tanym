@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use tauri::Manager;
 
@@ -50,6 +51,65 @@ async fn check_ollama_ready() -> Result<bool, String> {
     }
 }
 
+const API_KEYCHAIN_SERVICE: &str = "com.tanym.app.ai";
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ApiKeyProvider {
+    Openai,
+    Anthropic,
+    Google,
+}
+
+impl ApiKeyProvider {
+    fn account_name(self) -> &'static str {
+        match self {
+            ApiKeyProvider::Openai => "openai",
+            ApiKeyProvider::Anthropic => "anthropic",
+            ApiKeyProvider::Google => "google",
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct ApiKeyStatus {
+    has_key: bool,
+}
+
+#[tauri::command]
+fn set_api_key(provider: ApiKeyProvider, value: String) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("API key must not be empty.".to_string());
+    }
+    let entry = keyring::Entry::new(API_KEYCHAIN_SERVICE, provider.account_name())
+        .map_err(|e| e.to_string())?;
+    entry.set_password(trimmed).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_api_key_status(provider: ApiKeyProvider) -> Result<ApiKeyStatus, String> {
+    let entry = keyring::Entry::new(API_KEYCHAIN_SERVICE, provider.account_name())
+        .map_err(|e| e.to_string())?;
+    match entry.get_password() {
+        Ok(value) => Ok(ApiKeyStatus {
+            has_key: !value.trim().is_empty(),
+        }),
+        Err(keyring::Error::NoEntry) => Ok(ApiKeyStatus { has_key: false }),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_api_key(provider: ApiKeyProvider) -> Result<(), String> {
+    let entry = keyring::Entry::new(API_KEYCHAIN_SERVICE, provider.account_name())
+        .map_err(|e| e.to_string())?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -58,7 +118,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_system_fonts,
             get_ollama_endpoint,
-            check_ollama_ready
+            check_ollama_ready,
+            set_api_key,
+            get_api_key_status,
+            delete_api_key
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

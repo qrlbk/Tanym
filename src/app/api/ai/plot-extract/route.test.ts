@@ -8,6 +8,7 @@ vi.mock("ai", () => ({
 
 vi.mock("@ai-sdk/openai", () => ({
   openai: () => "mock-model",
+  createOpenAI: () => () => "mock-model",
 }));
 
 import { POST } from "./route";

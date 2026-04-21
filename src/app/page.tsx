@@ -14,6 +14,7 @@ import SceneTabs from "@/components/Editor/SceneTabs";
 import StatusBar from "@/components/StatusBar/StatusBar";
 import FindReplaceDialog from "@/components/Dialogs/FindReplace";
 import FileMenu from "@/components/Dialogs/FileMenu";
+import AISettingsDialog from "@/components/Dialogs/AISettingsDialog";
 import { useUIStore } from "@/stores/uiStore";
 import { useAIStore } from "@/stores/aiStore";
 import PlotIndexBridge from "@/components/PlotStory/PlotIndexBridge";
@@ -39,6 +40,7 @@ export default function Home() {
   const aiPanelOpen = useAIStore((s) => s.panelOpen);
   const plotPanelOpen = useUIStore((s) => s.showPlotPanel);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [aiSettingsOpen, setAISettingsOpen] = useState(false);
 
   useEffect(() => {
     if (aiPanelOpen && !plotPanelOpen && rightPanelTab !== "ai") {
@@ -88,7 +90,15 @@ export default function Home() {
             <FindReplaceDialog />
           </>
         )}
-        <FileMenu open={fileMenuOpen} onClose={() => setFileMenuOpen(false)} />
+        <FileMenu
+          open={fileMenuOpen}
+          onClose={() => setFileMenuOpen(false)}
+          onOpenAISettings={() => setAISettingsOpen(true)}
+        />
+        <AISettingsDialog
+          open={aiSettingsOpen}
+          onClose={() => setAISettingsOpen(false)}
+        />
         <Toaster />
         <ShortcutsDialog />
       </div>

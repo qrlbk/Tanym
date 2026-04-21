@@ -7,6 +7,7 @@ import {
   Download,
   Printer,
   FilePlus,
+  KeyRound,
   X,
   Clock,
   Copy,
@@ -27,9 +28,11 @@ import { UI_COLORS } from "@/lib/theme/colors";
 export default function FileMenu({
   open,
   onClose,
+  onOpenAISettings,
 }: {
   open: boolean;
   onClose: () => void;
+  onOpenAISettings: () => void;
 }) {
   const editor = useEditorContext();
   const title = useDocumentStore((s) => s.title);
@@ -287,6 +290,14 @@ export default function FileMenu({
           <div className="my-2 h-px" style={{ background: UI_COLORS.ribbon.separator }} />
 
           <MenuItem icon={Printer} label="Печать / PDF" onClick={handlePrint} />
+          <MenuItem
+            icon={KeyRound}
+            label="Настройки AI-ключей"
+            onClick={() => {
+              onClose();
+              onOpenAISettings();
+            }}
+          />
 
           {inTauri && recent.length > 0 && (
             <>
