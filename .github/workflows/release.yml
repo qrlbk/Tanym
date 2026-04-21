@@ -106,27 +106,34 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
 
       - name: Configure Apple notarization (macOS)
+        id: notarization
         if: runner.os == 'macOS'
         env:
           APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          # Reset notarization env even if inherited from runner/environment.
-          echo "APPLE_ID=" >> "$GITHUB_ENV"
-          echo "APPLE_PASSWORD=" >> "$GITHUB_ENV"
-          echo "APPLE_TEAM_ID=" >> "$GITHUB_ENV"
-
           if [ -n "$APPLE_ID_SECRET" ] && [ -n "$APPLE_PASSWORD_SECRET" ] && [ ${#APPLE_TEAM_ID_SECRET} -ge 3 ]; then
-            echo "APPLE_ID=$APPLE_ID_SECRET" >> "$GITHUB_ENV"
-            echo "APPLE_PASSWORD=$APPLE_PASSWORD_SECRET" >> "$GITHUB_ENV"
-            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_SECRET" >> "$GITHUB_ENV"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "Apple notarization enabled."
           else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "Apple notarization disabled: APPLE_* secrets are missing or invalid."
           fi
 
-      - name: Build Tauri bundles
+      - name: Build Tauri bundles (with notarization)
+        if: runner.os != 'macOS' || steps.notarization.outputs.enabled == 'true'
+        run: npm run tauri:build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build Tauri bundles (without notarization)
+        if: runner.os == 'macOS' && steps.notarization.outputs.enabled != 'true'
         run: npm run tauri:build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
