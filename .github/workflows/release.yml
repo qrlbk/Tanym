@@ -105,15 +105,28 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
 
+      - name: Configure Apple notarization (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_ID_SECRET" ] && [ -n "$APPLE_PASSWORD_SECRET" ] && [ ${#APPLE_TEAM_ID_SECRET} -ge 3 ]; then
+            echo "APPLE_ID=$APPLE_ID_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_SECRET" >> "$GITHUB_ENV"
+            echo "Apple notarization enabled."
+          else
+            echo "Apple notarization disabled: APPLE_* secrets are missing or invalid."
+          fi
+
       - name: Build Tauri bundles
         run: npm run tauri:build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload bundle outputs
         uses: actions/upload-artifact@v4

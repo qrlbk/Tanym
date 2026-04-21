@@ -112,6 +112,23 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
 
+      # Notarization включаем только при полном наборе валидных APPLE_* секретов.
+      - name: Configure Apple notarization (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_ID_SECRET" ] && [ -n "$APPLE_PASSWORD_SECRET" ] && [ ${#APPLE_TEAM_ID_SECRET} -ge 3 ]; then
+            echo "APPLE_ID=$APPLE_ID_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_SECRET" >> "$GITHUB_ENV"
+            echo "Apple notarization enabled."
+          else
+            echo "Apple notarization disabled: APPLE_* secrets are missing or invalid."
+          fi
+
       - name: Tauri build
         run: npm run tauri:build
         env:
@@ -120,9 +137,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Пустая строка ломает codesign на GitHub macOS; «-» = ad-hoc подпись без сертификата Apple.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload Tauri artifacts
         if: always()
