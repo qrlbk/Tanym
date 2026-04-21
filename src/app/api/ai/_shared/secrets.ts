@@ -15,10 +15,7 @@ type KeytarLike = {
 
 async function loadKeytarRuntime(): Promise<KeytarLike | null> {
   try {
-    const { createRequire } = await import("node:module");
-    const require = createRequire(import.meta.url);
-    const moduleName = ["key", "tar"].join("");
-    const mod = require(moduleName);
+    const mod = await import("keytar");
     return mod.default ?? mod;
   } catch {
     return null;
@@ -44,10 +41,8 @@ async function readFromKeychain(envVar: string): Promise<string | null> {
 }
 
 export async function getProviderSecret(envVar: string): Promise<string | null> {
-  const fromEnv = process.env[envVar];
-  if (typeof fromEnv === "string" && fromEnv.trim()) {
-    return fromEnv.trim();
-  }
+  // Cloud provider keys are accepted only from desktop keychain settings.
+  // No env fallback to avoid accidental leakage/misconfiguration via process env.
   return readFromKeychain(envVar);
 }
 

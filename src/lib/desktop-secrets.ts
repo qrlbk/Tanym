@@ -9,10 +9,26 @@ export async function getDesktopApiKeyStatus(
 ): Promise<ApiKeyStatus> {
   if (!isTauri()) return { hasKey: false };
   try {
-    const status = await invoke<{ has_key: boolean }>("get_api_key_status", {
-      provider,
+    const res = await fetch("/api/ai/keychain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status", provider }),
     });
-    return { hasKey: status.has_key === true };
+    if (res.ok) {
+      const data = (await res.json()) as { hasKey?: boolean };
+      return { hasKey: data.hasKey === true };
+    }
+  } catch {
+    // fallback to Tauri invoke path
+  }
+  try {
+    const status = await invoke<{ has_key?: boolean; hasKey?: boolean }>(
+      "get_api_key_status",
+      {
+      provider,
+      },
+    );
+    return { hasKey: status.has_key === true || status.hasKey === true };
   } catch {
     return { hasKey: false };
   }
@@ -23,6 +39,20 @@ export async function setDesktopApiKey(
   value: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!isTauri()) return { ok: false, message: "not_tauri" };
+  try {
+    const res = await fetch("/api/ai/keychain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set", provider, value }),
+    });
+    if (res.ok) return { ok: true };
+    const text = await res.text();
+    if (text) {
+      return { ok: false, message: text };
+    }
+  } catch {
+    // fallback to Tauri invoke path
+  }
   try {
     await invoke("set_api_key", { provider, value });
     return { ok: true };
@@ -36,6 +66,20 @@ export async function deleteDesktopApiKey(
   provider: ApiKeyProvider,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!isTauri()) return { ok: false, message: "not_tauri" };
+  try {
+    const res = await fetch("/api/ai/keychain", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider }),
+    });
+    if (res.ok) return { ok: true };
+    const text = await res.text();
+    if (text) {
+      return { ok: false, message: text };
+    }
+  } catch {
+    // fallback to Tauri invoke path
+  }
   try {
     await invoke("delete_api_key", { provider });
     return { ok: true };

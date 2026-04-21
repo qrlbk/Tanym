@@ -11,12 +11,18 @@ vi.mock("@ai-sdk/openai", () => ({
   createOpenAI: () => () => "mock-model",
 }));
 
+vi.mock("@/app/api/ai/_shared/secrets", () => ({
+  resolveProviderModel: async () => ({
+    model: "mock-model",
+    missingKeyEnvVar: null,
+  }),
+}));
+
 import { POST } from "./route";
 
 describe("POST /api/ai/plot-extract", () => {
   beforeEach(() => {
     generateObjectMock.mockReset();
-    process.env.OPENAI_API_KEY = "test-key";
   });
 
   it("returns selfContradictions from model output", async () => {

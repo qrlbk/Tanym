@@ -184,7 +184,7 @@ In desktop builds you can set OpenAI/Anthropic/Google keys from **File -> AI key
 
 - Keys are stored locally in the OS keychain.
 - Keys are not written to project files, `localStorage`, or IndexedDB.
-- Use `.env.local` only if you prefer file-based local development setup.
+- Cloud AI routes in desktop mode read keys only from this keychain store.
 
 ---
 

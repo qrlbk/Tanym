@@ -46,6 +46,7 @@ const defaultPrivateLanDevOrigins = [
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
+  serverExternalPackages: ["keytar"],
   allowedDevOrigins:
     allowedDevOriginsFromEnv?.length ? allowedDevOriginsFromEnv : defaultPrivateLanDevOrigins,
   turbopack: {

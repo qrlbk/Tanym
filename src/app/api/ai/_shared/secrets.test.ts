@@ -6,29 +6,21 @@ import {
   resolveProviderModel,
 } from "./secrets";
 
-const ORIGINAL_OPENAI = process.env.OPENAI_API_KEY;
-
 afterEach(() => {
-  if (typeof ORIGINAL_OPENAI === "string") {
-    process.env.OPENAI_API_KEY = ORIGINAL_OPENAI;
-  } else {
-    delete process.env.OPENAI_API_KEY;
-  }
   __setKeytarLoaderForTests(async () => null);
 });
 
 describe("AI secret resolver", () => {
-  it("uses environment variable first", async () => {
-    process.env.OPENAI_API_KEY = "  env-key  ";
+  it("reads cloud key from keychain", async () => {
     __setKeytarLoaderForTests(async () => ({
       getPassword: async () => "keychain-key",
     }));
     const secret = await getProviderSecret("OPENAI_API_KEY");
-    expect(secret).toBe("env-key");
+    expect(secret).toBe("keychain-key");
   });
 
-  it("falls back to keychain when env is absent", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("does not use environment fallback", async () => {
+    process.env.OPENAI_API_KEY = "env-key";
     __setKeytarLoaderForTests(async () => ({
       getPassword: async () => "keychain-key",
     }));
