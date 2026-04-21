@@ -21,7 +21,7 @@ jobs:
       version: ${{ steps.versions.outputs.version }}
       tag: ${{ steps.versions.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Validate tag and synced versions
         id: versions
@@ -59,10 +59,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -129,7 +129,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
 
       - name: Upload bundle outputs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: bundles-${{ matrix.os }}
           path: src-tauri/target/release/bundle/**
@@ -142,7 +142,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Download bundled artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: bundles-*
           path: dist
