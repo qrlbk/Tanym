@@ -16,6 +16,10 @@
 - `docs/OPEN_SOURCE.md` — чеклист для публикации open source.
 - `docs/ARCHITECTURE.md` — обзор подсистем и потоков данных.
 - Шаблоны GitHub: `.github/pull_request_template.md`, issue templates для багов и фич.
+- Автоматический релизный workflow `.github/workflows/release.yml`: по тегу `vX.Y.Z` собирает
+  установщики для Windows/macOS/Linux и публикует их в GitHub Releases.
+- Правило релиза: версия тега должна совпадать с `package.json` и
+  `src-tauri/tauri.conf.json`, иначе публикация останавливается с ошибкой.
 
 ### Добавлено (ранее в этой ветке)
 

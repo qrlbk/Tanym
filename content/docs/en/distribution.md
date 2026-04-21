@@ -2,6 +2,16 @@
 
 How to prepare Tanym release builds for shipping.
 
+## Download for end users
+
+Latest installers are published at [GitHub Releases](https://github.com/qrlbk/Tanym/releases/latest).
+
+- Windows: `.msi` (or `.exe` when available)
+- macOS: `.dmg`
+- Linux: `.AppImage`, `.deb`, `.rpm`
+
+Each release also includes `SHA256SUMS.txt` for integrity checks.
+
 ## Monetization model (current direction)
 
 - **Paid desktop** (Tauri build) as a primary channel.
@@ -61,3 +71,10 @@ Separate repo or `apps/web-landing` MVP: hero screenshot, three bullets (continu
 - [ ] Signed (and notarized on macOS) artifacts.
 - [ ] Updater endpoint live (if enabled).
 - [ ] Landing updated.
+
+## Maintainer release flow (GitHub tags)
+
+1. Update versions in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.
+2. Update `CHANGELOG.md`.
+3. Create and push tag: `vX.Y.Z`.
+4. GitHub Action `.github/workflows/release.yml` builds installers for all 3 OSes and publishes assets into the GitHub Release page.
