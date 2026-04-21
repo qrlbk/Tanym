@@ -120,6 +120,11 @@ jobs:
           APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Сбрасываем значения, даже если они пришли из внешнего окружения runner.
+          echo "APPLE_ID=" >> "$GITHUB_ENV"
+          echo "APPLE_PASSWORD=" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=" >> "$GITHUB_ENV"
+
           if [ -n "$APPLE_ID_SECRET" ] && [ -n "$APPLE_PASSWORD_SECRET" ] && [ ${#APPLE_TEAM_ID_SECRET} -ge 3 ]; then
             echo "APPLE_ID=$APPLE_ID_SECRET" >> "$GITHUB_ENV"
             echo "APPLE_PASSWORD=$APPLE_PASSWORD_SECRET" >> "$GITHUB_ENV"
