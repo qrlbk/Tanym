@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { KeyRound, Trash2, X } from "lucide-react";
 import { UI_COLORS } from "@/lib/theme/colors";
 import { isTauri } from "@/lib/tauri-helpers";
@@ -49,18 +49,6 @@ export default function AISettingsDialog({
   });
 
   const desktop = isTauri();
-
-  useEffect(() => {
-    if (!open || !desktop) return;
-    void refreshStatuses();
-  }, [open, desktop]);
-
-  useEffect(() => {
-    if (!open) {
-      // Не держим введённые ключи в памяти после закрытия диалога.
-      setValues({ openai: "", anthropic: "", google: "" });
-    }
-  }, [open]);
 
   async function refreshStatuses() {
     const entries = await Promise.all(
