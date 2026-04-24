@@ -23,6 +23,7 @@ function systemPromptForMode(mode: "structure" | "expand"): string {
       `You organize a novelist's character sheet using ONLY information present in the facts and manuscript excerpts below. ` +
       `Do NOT invent biography, backstory, or traits that are not supported by the sources. ` +
       `Rephrase and group facts into the sheet fields; leave "" where the sources say nothing. ` +
+      `In notes, prefer compact bullets for motivation, moral line, pressure points, and need_vs_want if evidence exists. ` +
       `Set confidence higher only when evidence is explicit. ` +
       base
     );
@@ -30,6 +31,7 @@ function systemPromptForMode(mode: "structure" | "expand"): string {
   return (
     `You help a novelist draft a character sheet. Use facts and excerpts as primary evidence. ` +
     `You may add careful, plausible hypotheses where gaps exist — keep them tentative and short; prefer "" over wild guesses. ` +
+    `In notes include explicit labels: motivation, need_vs_want, pressure_points, arc_stage. ` +
     `Return concise reasons[] for key updates. ` +
     base
   );

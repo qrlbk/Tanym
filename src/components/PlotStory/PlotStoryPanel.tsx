@@ -25,6 +25,9 @@ import { usePlotStoryStore } from "@/stores/plotStoryStore";
 import { executeToolCall } from "@/lib/ai/client-tools";
 import { THEME, UI_COLORS } from "@/lib/theme/colors";
 import CharacterCardsPanel from "@/components/PlotStory/CharacterCardsPanel";
+import { computePlotChunks } from "@/lib/plot-index/chunks";
+import { buildProblemItems } from "@/lib/plot-index/problem-items";
+import { plotFeatures } from "@/lib/plot-index/features";
 import {
   getConflictStrictness,
   shouldDisplayWarning,
@@ -48,6 +51,8 @@ export default function PlotStoryPanel({
   const setContinuityFilter = useUIStore((s) => s.setContinuityFilter);
   const setActiveSceneId = useUIStore((s) => s.setActiveSceneId);
   const activeSceneId = useUIStore((s) => s.activeSceneId);
+  const workspaceView = useUIStore((s) => s.workspaceView);
+  const setWorkspaceView = useUIStore((s) => s.setWorkspaceView);
 
   const ingestPhase = usePlotIndexStore((s) => s.ingestPhase);
   const lastIndexedAt = usePlotIndexStore((s) => s.lastIndexedAt);
@@ -55,8 +60,11 @@ export default function PlotStoryPanel({
 
   const facts = usePlotStoryStore((s) => s.facts);
   const relations = usePlotStoryStore((s) => s.relations);
+  const salientObjects = usePlotStoryStore((s) => s.salientObjects);
   const consistencyWarnings = usePlotStoryStore((s) => s.consistencyWarnings);
   const chekhovWarnings = usePlotStoryStore((s) => s.chekhovWarnings);
+  const motivationAssessments = usePlotStoryStore((s) => s.motivationAssessments);
+  const consequenceAssessments = usePlotStoryStore((s) => s.consequenceAssessments);
   const lastExtractionAt = usePlotStoryStore((s) => s.lastExtractionAt);
   const extractionError = usePlotStoryStore((s) => s.extractionError);
   const analysisPhase = usePlotStoryStore((s) => s.analysisPhase);
@@ -125,6 +133,17 @@ export default function PlotStoryPanel({
     }
   }, [activeSceneId]);
 
+  useEffect(() => {
+    if (!plotFeatures.storyGraphV1) return;
+    if (tab === "graph") {
+      if (workspaceView !== "graph") setWorkspaceView("graph");
+      return;
+    }
+    if (workspaceView === "graph") {
+      setWorkspaceView("scene");
+    }
+  }, [setWorkspaceView, tab, workspaceView]);
+
   const filteredWarnings = consistencyWarnings.filter((warning) => {
     if (!shouldDisplayWarning(warning, conflictStrictness)) return false;
     const status = warningStatuses[warning.key] ?? "new";
@@ -174,6 +193,30 @@ export default function PlotStoryPanel({
     timeline: filteredWarnings.filter((w) => w.kind === "timeline_conflict"),
     causal: filteredWarnings.filter((w) => w.kind === "causal_conflict"),
   };
+  const allChunks = useMemo(() => (editor ? computePlotChunks(editor) : []), [editor]);
+  const problemItems = useMemo(
+    () =>
+      buildProblemItems({
+        consistencyWarnings,
+        chekhovWarnings,
+        salientObjects,
+        facts,
+        chunks: allChunks,
+        warningStatuses,
+        motivationAssessments,
+        consequenceAssessments,
+      }),
+    [
+      allChunks,
+      chekhovWarnings,
+      consistencyWarnings,
+      facts,
+      salientObjects,
+      warningStatuses,
+      motivationAssessments,
+      consequenceAssessments,
+    ],
+  );
 
   const jumpToChunk = useCallback(
     (chunkId: string) => {
@@ -259,13 +302,19 @@ export default function PlotStoryPanel({
       </div>
 
       <div
-        className="flex border-b text-[11px]"
+        className="grid grid-cols-4 border-b text-[10px]"
         style={{ borderColor: UI_COLORS.storyPanel.border }}
       >
         {(
           [
             ["characters", "Факты", AlertTriangle],
             ["cards", "Карточки", UserCircle],
+            ...(plotFeatures.storyGraphV1
+              ? ([["graph", "Graph", Network]] as const)
+              : []),
+            ...(plotFeatures.problemPanelV2
+              ? ([["problems", "Problems", AlertTriangle]] as const)
+              : []),
             ["conflicts", "Конфликты", Network],
             ["timeline", "Таймлайн", Target],
             ["resolutions", "Исправления", CheckCircle2],
@@ -274,8 +323,16 @@ export default function PlotStoryPanel({
           <button
             key={id}
             type="button"
-            onClick={() => setTab(id)}
-            className="flex-1 flex items-center justify-center gap-1 py-2 px-1 border-b-2 transition-colors"
+            onClick={() => {
+              setTab(id);
+              if (!plotFeatures.storyGraphV1) return;
+              if (id === "graph") {
+                setWorkspaceView("graph");
+              } else if (workspaceView === "graph") {
+                setWorkspaceView("scene");
+              }
+            }}
+            className="flex items-center justify-center gap-1 py-2 px-1.5 border-b-2 transition-colors min-w-0"
             style={
               tab === id
                 ? {
@@ -783,6 +840,104 @@ export default function PlotStoryPanel({
                   </section>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {tab === "graph" && (
+          <div className="space-y-3">
+            <h3
+              className="text-[13px] font-semibold tracking-tight"
+              style={{ color: UI_COLORS.storyPanel.textPrimary }}
+            >
+              Story Graph
+            </h3>
+            <p className="text-[12px] leading-[1.45]" style={{ color: UI_COLORS.storyPanel.textSecondary }}>
+              Открыт полноэкранный визуальный граф. Выбирайте узлы, смотрите связи и переходите к нужным фрагментам.
+            </p>
+          </div>
+        )}
+
+        {tab === "problems" && (
+          <div className="space-y-4">
+            <h3
+              className="text-[13px] font-semibold tracking-tight"
+              style={{ color: UI_COLORS.storyPanel.textPrimary }}
+            >
+              Problem Panel
+            </h3>
+            <p className="text-[11px]" style={{ color: UI_COLORS.storyPanel.textMuted }}>
+              Автоматический аудит логики сцены и проекта.
+            </p>
+            <ul className="space-y-2">
+              {problemItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-md p-3 space-y-1.5"
+                  style={{
+                    border: `1px solid ${THEME.surface.inputBorder}`,
+                    background: THEME.surface.card,
+                  }}
+                >
+                  <p className="text-[12px] font-semibold" style={{ color: UI_COLORS.storyPanel.textPrimary }}>
+                    {item.category}: {item.title}
+                  </p>
+                  <p className="text-[11px]" style={{ color: UI_COLORS.storyPanel.textSecondary }}>
+                    {item.explanation}
+                  </p>
+                  {item.reasoningTrace && (
+                    <p className="text-[10px]" style={{ color: UI_COLORS.storyPanel.textMuted }}>
+                      {item.reasoningTrace}
+                    </p>
+                  )}
+                  {item.evidenceQuote && (
+                    <p className="text-[10px]" style={{ color: UI_COLORS.storyPanel.textMuted }}>
+                      «{item.evidenceQuote}»
+                    </p>
+                  )}
+                  <div className="flex gap-1.5 flex-wrap">
+                    {item.relatedChunkIds.slice(0, 3).map((chunkId) => (
+                      <button
+                        key={`${item.id}-${chunkId}`}
+                        type="button"
+                        onClick={() => jumpToChunk(chunkId)}
+                        className="px-2 py-1 rounded text-[10px] border"
+                        style={{
+                          borderColor: THEME.warning.border,
+                          color: THEME.warning.text,
+                          background: THEME.warning.subtleBg,
+                        }}
+                      >
+                        сцена/фрагмент
+                      </button>
+                    ))}
+                    {item.warningKey && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab("conflicts");
+                          const match = consistencyWarnings.find((w) => w.key === item.warningKey);
+                          const chunkId = match?.newChunkIds[0] ?? match?.previousChunkIds[0];
+                          if (chunkId) jumpToChunk(chunkId);
+                        }}
+                        className="px-2 py-1 rounded text-[10px] border"
+                        style={{
+                          borderColor: THEME.surface.inputBorder,
+                          color: UI_COLORS.storyPanel.textSecondary,
+                          background: "transparent",
+                        }}
+                      >
+                        открыть конфликт
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {problemItems.length === 0 && (
+              <p className="text-[12px]" style={{ color: UI_COLORS.storyPanel.textMuted }}>
+                Проблем не обнаружено для текущего контекста.
+              </p>
             )}
           </div>
         )}

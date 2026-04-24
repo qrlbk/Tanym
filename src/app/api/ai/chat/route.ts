@@ -8,6 +8,7 @@ import {
 } from "@/lib/ai/project-context";
 import { enforceRateLimit } from "@/app/api/ai/_shared/rate-limit";
 import { resolveProviderModel } from "@/app/api/ai/_shared/secrets";
+import { plotFeatures } from "@/lib/plot-index/features";
 
 const MAX_EDITOR_CONTEXT_CHARS = 120_000;
 const MAX_CHARACTER_CONTEXT_CHARS = 32_000;
@@ -79,6 +80,44 @@ function editorContextToSystemAppend(raw: unknown): string {
   return `\n\n## Editor context (automatic; current when the message was sent)${meta}\n\n${scope}\n\n---\n\n${safe}\n\n---\n`;
 }
 
+function storyReasoningToSystemAppend(raw: unknown): string {
+  if (!plotFeatures.deepStoryReasoningV1) return "";
+  if (typeof raw !== "string") return "";
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return `\n\n## Story reasoning memory (quality-first)\nUse these causal and motivation traces to explain why events happen and keep character logic consistent.\n\n${trimmed}\n`;
+}
+
+function messageToText(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "";
+  const content = (raw as { content?: unknown }).content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => (part && typeof part === "object" ? (part as { text?: unknown }).text : ""))
+    .filter((item): item is string => typeof item === "string")
+    .join(" ");
+}
+
+function hasRewriteIntent(messages: unknown[]): boolean {
+  const last = messages.at(-1);
+  const text = messageToText(last).toLowerCase();
+  return /(rewrite|перепиши|переписать|rewrite scene|logic fix)/i.test(text);
+}
+
+function rewriteContractAppend(args: {
+  enabled: boolean;
+  rewriteIntent: boolean;
+  hasProjectContext: boolean;
+}): string {
+  const { enabled, rewriteIntent, hasProjectContext } = args;
+  if (!enabled || !rewriteIntent) return "";
+  const missingContextNote = hasProjectContext
+    ? ""
+    : "\nIf constraints are missing, refuse rewrite and ask user to run story analysis first.";
+  return `\n\n## Contextual Rewrite Contract\nIf user asks to rewrite a scene, rewrite is allowed only with these constraints:\n- character logic\n- world/lore rules\n- prior events\n- active future promises\nReturn logic-preserving edits, not stylistic beautification.${missingContextNote}\n`;
+}
+
 export async function POST(req: Request) {
   const blocked = enforceRateLimit(req, "chat", 60, 60_000);
   if (blocked) return blocked;
@@ -89,6 +128,7 @@ export async function POST(req: Request) {
     editorContext,
     characterContext,
     projectContext,
+    storyReasoningContext,
   } = await req.json();
 
   const provider = getProvider(providerId ?? "openai-gpt4o-mini");
@@ -103,6 +143,8 @@ export async function POST(req: Request) {
   }
 
   const uiMessages = Array.isArray(messages) ? messages : [];
+  const rewriteIntent = hasRewriteIntent(uiMessages);
+  const hasProjectCtx = isProjectContext(projectContext);
   const modelMessages = await convertToModelMessages(uiMessages, {
     tools: serverTools,
   });
@@ -111,7 +153,13 @@ export async function POST(req: Request) {
     SYSTEM_PROMPT +
     projectContextToSystemAppend(projectContext) +
     editorContextToSystemAppend(editorContext) +
-    characterContextToSystemAppend(characterContext);
+    characterContextToSystemAppend(characterContext) +
+    storyReasoningToSystemAppend(storyReasoningContext) +
+    rewriteContractAppend({
+      enabled: plotFeatures.contextualRewriteV1,
+      rewriteIntent,
+      hasProjectContext: hasProjectCtx,
+    });
 
   const result = streamText({
     model: resolved.model!,

@@ -25,7 +25,9 @@ import {
 import { useAIStore } from "@/stores/aiStore";
 import {
   buildPersistedPlotStory,
+  loadSceneCacheFromSqlite,
   loadPlotStory,
+  saveSceneCacheEntryToSqlite,
   savePlotStory,
 } from "@/lib/plot-story-persistence";
 
@@ -57,6 +59,16 @@ export default function PlotIndexBridge() {
     void loadPlotStory(project.id).then((data) => {
       if (cancelled || !data) return;
       usePlotStoryStore.getState().hydrateFromPersistence(data);
+    });
+    void loadSceneCacheFromSqlite(project.id).then((cache) => {
+      if (cancelled) return;
+      for (const [sceneId, entry] of Object.entries(cache)) {
+        usePlotIndexStore.getState().setSceneCacheEntry(sceneId, {
+          fingerprint: entry.fingerprint,
+          entities: entry.entities,
+          lastAnalyzedAt: entry.lastAnalyzedAt,
+        });
+      }
     });
     return () => {
       cancelled = true;
@@ -174,6 +186,13 @@ export default function PlotIndexBridge() {
               .getState()
               .mergeSceneExtraction(scene.id, data, chunks);
             usePlotIndexStore.getState().setSceneCacheEntry(scene.id, {
+              fingerprint: fp,
+              entities: data.facts.map((fact) => fact.entity),
+              lastAnalyzedAt: Date.now(),
+            });
+            void saveSceneCacheEntryToSqlite({
+              projectId: project.id,
+              sceneId: scene.id,
               fingerprint: fp,
               entities: data.facts.map((fact) => fact.entity),
               lastAnalyzedAt: Date.now(),

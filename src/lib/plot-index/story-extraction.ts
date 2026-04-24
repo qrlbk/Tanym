@@ -3,6 +3,8 @@ import type { PlotChunk } from "./chunks";
 export type PlotFact = {
   id: string;
   entity: string;
+  characterCanonicalId?: string | null;
+  entityAliases?: string[];
   entityType:
     | "character"
     | "object"
@@ -78,6 +80,59 @@ export type ChekhovWarning = {
   message: string;
 };
 
+export type DeepReasoningSignalType =
+  | "characterIntent"
+  | "motive"
+  | "internalConflict"
+  | "decision"
+  | "consequence"
+  | "promisePayoff";
+
+export type DeepReasoningSignal = {
+  id: string;
+  type: DeepReasoningSignalType;
+  entity: string;
+  characterCanonicalId?: string | null;
+  summary: string;
+  evidenceQuote: string;
+  chunkIds: string[];
+  confidence: number;
+};
+
+export type CausalChain = {
+  id: string;
+  trigger: string;
+  decision: string;
+  action: string;
+  consequence: string;
+  involvedEntities: string[];
+  chunkIds: string[];
+  confidence: number;
+  evidenceQuote: string;
+};
+
+export type MotivationAssessment = {
+  id: string;
+  entity: string;
+  characterCanonicalId?: string | null;
+  motivation: string;
+  verdict: "strong" | "weak";
+  reason: string;
+  evidenceQuote: string;
+  chunkIds: string[];
+  confidence: number;
+};
+
+export type ConsequenceAssessment = {
+  id: string;
+  event: string;
+  verdict: "clear" | "missing";
+  reason: string;
+  evidenceQuote: string;
+  chunkIds: string[];
+  confidence: number;
+};
+
 const ENTITY_TYPE_RANK: Record<PlotFact["entityType"], number> = {
   character: 6,
   object: 5,
@@ -90,6 +145,33 @@ const ENTITY_TYPE_RANK: Record<PlotFact["entityType"], number> = {
 function clamp01(value: number | null | undefined, fallback = 0.5): number {
   if (typeof value !== "number") return fallback;
   return Math.max(0, Math.min(1, value));
+}
+
+function normalizeEntityToken(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[«»"'`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function canonicalizeCharacterId(name: string): string {
+  const normalized = normalizeEntityToken(name)
+    .replace(/\b(mr|mrs|ms|sir|lady|doctor|dr|капитан|господин|мисс|миссис)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized.replace(/[^\p{L}\p{N}]+/gu, "-");
+}
+
+function canonicalEntityKey(
+  entity: string,
+  entityType: PlotFact["entityType"] | "unknown",
+  canonicalId?: string | null,
+): string {
+  if (entityType === "character") {
+    return `character:${canonicalId ?? canonicalizeCharacterId(entity)}`;
+  }
+  return `entity:${normalizeEntityToken(entity)}`;
 }
 
 export function normalizePlotFact(
@@ -105,6 +187,11 @@ export function normalizePlotFact(
     entityType: fact.entityType ?? "other",
     entityConfidence: clamp01(fact.entityConfidence, 0.5),
     narrativeRole: fact.narrativeRole ?? null,
+    characterCanonicalId:
+      (fact.entityType ?? "other") === "character"
+        ? fact.characterCanonicalId ?? canonicalizeCharacterId(fact.entity)
+        : null,
+    entityAliases: Array.from(new Set((fact.entityAliases ?? []).map((alias) => alias.trim()).filter(Boolean))),
   };
 }
 
@@ -182,10 +269,6 @@ export function normalizeConsistencyWarnings(
   return warnings.map((warning) => normalizeConsistencyWarning(warning));
 }
 
-function factKey(entity: string, attribute: string): string {
-  return `${entity.trim().toLowerCase()}|${attribute.trim().toLowerCase()}`;
-}
-
 function inferConflictKind(
   attribute: string,
   previousValue: string,
@@ -233,14 +316,26 @@ export function mergeFactsAndDetectConflicts(
 ): { facts: PlotFact[]; warnings: ConsistencyWarning[] } {
   const map = new Map<string, PlotFact>();
   for (const f of existing) {
-    map.set(factKey(f.entity, f.attribute), normalizePlotFact(f));
+    const normalized = normalizePlotFact(f);
+    const entityKey = canonicalEntityKey(
+      normalized.entity,
+      normalized.entityType,
+      normalized.characterCanonicalId,
+    );
+    map.set(`${entityKey}|${normalized.attribute.trim().toLowerCase()}`, normalized);
   }
 
   const warnings: ConsistencyWarning[] = [];
 
   for (const raw of incoming) {
     const normalizedRaw = normalizePlotFact(raw);
-    const key = factKey(raw.entity, raw.attribute);
+    const incomingEntityType = raw.entityType ?? "other";
+    const entityKey = canonicalEntityKey(
+      raw.entity,
+      incomingEntityType,
+      incomingEntityType === "character" ? raw.characterCanonicalId ?? canonicalizeCharacterId(raw.entity) : null,
+    );
+    const key = `${entityKey}|${raw.attribute.trim().toLowerCase()}`;
     const prev = map.get(key);
     const normalizedNew = raw.value.trim().toLowerCase();
     const normalizedPrev = prev?.value.trim().toLowerCase();
@@ -283,6 +378,13 @@ export function mergeFactsAndDetectConflicts(
       value: raw.value,
       chunkIds: Array.from(new Set([...(prev?.chunkIds ?? []), ...raw.chunkIds])),
       quote: raw.quote ?? prev?.quote,
+      characterCanonicalId:
+        incomingEntityType === "character"
+          ? normalizedRaw.characterCanonicalId ?? prev?.characterCanonicalId ?? canonicalizeCharacterId(raw.entity)
+          : null,
+      entityAliases: Array.from(
+        new Set([...(prev?.entityAliases ?? []), ...(normalizedRaw.entityAliases ?? [])]),
+      ),
     };
     map.set(key, merged);
   }
@@ -299,7 +401,7 @@ export function mergeRelations(
   incoming: Omit<PlotRelation, "id">[],
 ): PlotRelation[] {
   const key = (a: string, b: string, rel: string) =>
-    `${a.toLowerCase()}|${b.toLowerCase()}|${rel}`;
+    `${canonicalizeCharacterId(a)}|${canonicalizeCharacterId(b)}|${rel}`;
   const map = new Map<string, PlotRelation>();
   for (const r of existing) {
     map.set(key(r.entityA, r.entityB, r.relation), r);

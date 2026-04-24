@@ -9,10 +9,14 @@ const chunkSchema = z.object({
   text: z.string(),
 });
 
+type TargetLanguage = "scene_cyrillic" | "scene_latin";
+
 const batchResultSchema = z.object({
   facts: z.array(
     z.object({
       entity: z.string(),
+      characterCanonicalId: z.string().nullable(),
+      entityAliases: z.array(z.string()),
       entityType: z.enum([
         "character",
         "object",
@@ -30,6 +34,116 @@ const batchResultSchema = z.object({
         "mcguffin",
         "other",
       ]).nullable(),
+      attribute: z.string(),
+      value: z.string(),
+      chunkIds: z.array(z.string()),
+      quote: z.string().nullable(),
+    }),
+  ),
+  relations: z.array(
+    z.object({
+      entityA: z.string(),
+      entityB: z.string(),
+      relation: z.enum([
+        "friend",
+        "enemy",
+        "neutral",
+        "family",
+        "romantic",
+        "secret",
+        "other",
+      ]),
+      note: z.string().nullable(),
+      chunkIds: z.array(z.string()),
+    }),
+  ),
+  salientObjects: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      chunkId: z.string(),
+    }),
+  ),
+  selfContradictions: z.array(
+    z.object({
+      kind: z.enum(["fact_conflict", "timeline_conflict", "causal_conflict"]),
+      message: z.string(),
+      quoteA: z.string(),
+      quoteB: z.string(),
+      chunkIds: z.array(z.string()),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+  reasoningSignals: z.array(
+    z.object({
+      type: z.enum([
+        "characterIntent",
+        "motive",
+        "internalConflict",
+        "decision",
+        "consequence",
+        "promisePayoff",
+      ]),
+      entity: z.string(),
+      characterCanonicalId: z.string().nullable(),
+      summary: z.string(),
+      evidenceQuote: z.string(),
+      chunkIds: z.array(z.string()),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+  causalChains: z.array(
+    z.object({
+      trigger: z.string(),
+      decision: z.string(),
+      action: z.string(),
+      consequence: z.string(),
+      involvedEntities: z.array(z.string()),
+      chunkIds: z.array(z.string()),
+      confidence: z.number().min(0).max(1),
+      evidenceQuote: z.string(),
+    }),
+  ),
+  motivationAssessments: z.array(
+    z.object({
+      entity: z.string(),
+      characterCanonicalId: z.string().nullable(),
+      motivation: z.string(),
+      verdict: z.enum(["strong", "weak"]),
+      reason: z.string(),
+      evidenceQuote: z.string(),
+      chunkIds: z.array(z.string()),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+  consequenceAssessments: z.array(
+    z.object({
+      event: z.string(),
+      verdict: z.enum(["clear", "missing"]),
+      reason: z.string(),
+      evidenceQuote: z.string(),
+      chunkIds: z.array(z.string()),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+});
+
+const legacyBatchResultSchema = z.object({
+  facts: z.array(
+    z.object({
+      entity: z.string(),
+      entityType: z.enum([
+        "character",
+        "object",
+        "document",
+        "location",
+        "event",
+        "other",
+      ]),
+      entityConfidence: z.number().min(0).max(1),
+      narrativeRole: z
+        .enum(["clue", "tool", "evidence", "atmosphere", "mcguffin", "other"])
+        .nullable(),
       attribute: z.string(),
       value: z.string(),
       chunkIds: z.array(z.string()),
@@ -108,6 +222,7 @@ export async function POST(req: Request) {
     .object({
       chunks: z.array(chunkSchema),
       providerId: z.string().optional(),
+      targetLanguage: z.enum(["scene_cyrillic", "scene_latin"]).optional(),
     })
     .safeParse(body);
   if (!parsed.success) {
@@ -127,12 +242,17 @@ export async function POST(req: Request) {
   }
 
   const chunks = parsed.data.chunks.filter((c) => c.text.trim().length > 0);
+  const targetLanguage: TargetLanguage = parsed.data.targetLanguage ?? "scene_cyrillic";
   if (chunks.length === 0) {
     return NextResponse.json({
       facts: [],
       relations: [],
       salientObjects: [],
       selfContradictions: [],
+      reasoningSignals: [],
+      causalChains: [],
+      motivationAssessments: [],
+      consequenceAssessments: [],
     });
   }
 
@@ -144,16 +264,45 @@ export async function POST(req: Request) {
   const selfContradictions: z.infer<
     typeof batchResultSchema
   >["selfContradictions"] = [];
+  const reasoningSignals: z.infer<typeof batchResultSchema>["reasoningSignals"] = [];
+  const causalChains: z.infer<typeof batchResultSchema>["causalChains"] = [];
+  const motivationAssessments: z.infer<typeof batchResultSchema>["motivationAssessments"] = [];
+  const consequenceAssessments: z.infer<typeof batchResultSchema>["consequenceAssessments"] = [];
 
-  try {
-    for (const batch of batches) {
-      const listing = batch
-        .map(
-          (c) =>
-            `--- FRAGMENT id=${JSON.stringify(c.id)} ---\n${c.text.trim()}`,
-        )
-        .join("\n\n");
+  const textLooksCyrillic = (value: string): boolean => /[\u0400-\u04FF]/.test(value);
+  const textLooksLatin = (value: string): boolean => /[A-Za-z]/.test(value);
+  const keepByLanguage = (value: string): boolean => {
+    const trimmed = value.trim();
+    if (trimmed.length <= 2) return true;
+    if (targetLanguage === "scene_cyrillic") {
+      if (textLooksCyrillic(trimmed)) return true;
+      if (!textLooksLatin(trimmed)) return true;
+      return false;
+    }
+    if (textLooksLatin(trimmed)) return true;
+    if (!textLooksCyrillic(trimmed)) return true;
+    return false;
+  };
 
+  const normalizeLanguage = (input: z.infer<typeof batchResultSchema>) => ({
+    ...input,
+    facts: input.facts.filter((fact) => keepByLanguage(`${fact.entity} ${fact.value}`)),
+    relations: input.relations.filter((rel) => keepByLanguage(`${rel.entityA} ${rel.entityB}`)),
+    salientObjects: input.salientObjects.filter((obj) => keepByLanguage(`${obj.name} ${obj.description}`)),
+    reasoningSignals: input.reasoningSignals.filter((sig) => keepByLanguage(`${sig.entity} ${sig.summary}`)),
+    causalChains: input.causalChains.filter((chain) =>
+      keepByLanguage(`${chain.trigger} ${chain.decision} ${chain.action} ${chain.consequence}`),
+    ),
+    motivationAssessments: input.motivationAssessments.filter((item) =>
+      keepByLanguage(`${item.entity} ${item.motivation} ${item.reason}`),
+    ),
+    consequenceAssessments: input.consequenceAssessments.filter((item) =>
+      keepByLanguage(`${item.event} ${item.reason}`),
+    ),
+  });
+
+  async function extractBatchWithFallback(listing: string) {
+    try {
       const { object } = await generateObject({
         model: resolved.model!,
         schema: batchResultSchema,
@@ -164,25 +313,89 @@ export async function POST(req: Request) {
           "Only include facts that clearly follow from the text; do not invent. " +
           "Every chunkIds entry must be an id that appears in the request fragments. " +
           "LANGUAGE: Write entity names, values, quotes, relation notes, and salient object name/description " +
-          "in the same language as the manuscript text they come from (Kazakh, Uzbek, English, Russian, etc.). " +
+          `in the same language as the manuscript text they come from (target=${targetLanguage}). ` +
           "If fragments mix languages, match each fact to the language of its cited fragment(s). " +
           "Use short snake_case Latin for attribute keys when possible (e.g. eye_color, left_arm_injury); " +
           "if the manuscript is not Latin-script, you may use concise keys in the manuscript language instead. " +
           "For each fact, classify entityType as one of: character, object, document, location, event, other. " +
+          "For character facts set characterCanonicalId in stable lowercase-latin slug form; include common aliases in entityAliases. " +
           "Do not classify inanimate items (key, cigarette butt, glass, note) as character. " +
           "Set entityConfidence in [0..1] and narrativeRole when applicable " +
           "(clue/tool/evidence/atmosphere/mcguffin/other). " +
           "relations: only when ties between entities are clearly stated or shown in dialogue. " +
+          "Return reasoningSignals for intents/motives/decisions/consequences only if clearly supported by text. " +
+          "Return causalChains in form trigger->decision->action->consequence where explicit. " +
+          "Return motivationAssessments and consequenceAssessments with evidenceQuote and confidence. " +
           "Also output selfContradictions only for explicit internal paradoxes in the fragments; " +
           "each must include direct quoteA/quoteB evidence and confidence (0..1). " +
           "Do not include stylistic metaphors or implicit interpretations.",
         prompt: `Analyze the fragments below and return JSON matching the schema.\n\n${listing}`,
       });
+      return normalizeLanguage(object);
+    } catch (strictError) {
+      try {
+        const { object } = await generateObject({
+          model: resolved.model!,
+          schema: legacyBatchResultSchema,
+          temperature: 0,
+          maxOutputTokens: 1200,
+          system:
+            "You extract structured story memory from fiction manuscript fragments. " +
+            "Only include facts that clearly follow from the text; do not invent. " +
+            "Every chunkIds entry must be an id that appears in the request fragments. " +
+            `All free-text fields MUST follow target language=${targetLanguage}.`,
+          prompt: `Analyze the fragments below and return JSON matching the schema.\n\n${listing}`,
+        });
+        return normalizeLanguage({
+          ...object,
+          facts: object.facts.map((fact) => ({
+            ...fact,
+            characterCanonicalId: null,
+            entityAliases: [],
+          })),
+          reasoningSignals: [],
+          causalChains: [],
+          motivationAssessments: [],
+          consequenceAssessments: [],
+        });
+      } catch (legacyError) {
+        console.warn("[plot-extract] batch failed", {
+          strictError: strictError instanceof Error ? strictError.message : String(strictError),
+          legacyError: legacyError instanceof Error ? legacyError.message : String(legacyError),
+        });
+        return {
+          facts: [],
+          relations: [],
+          salientObjects: [],
+          selfContradictions: [],
+          reasoningSignals: [],
+          causalChains: [],
+          motivationAssessments: [],
+          consequenceAssessments: [],
+        };
+      }
+    }
+  }
 
-      facts.push(...object.facts);
-      relations.push(...object.relations);
-      salientObjects.push(...object.salientObjects);
-      selfContradictions.push(...object.selfContradictions);
+  try {
+    for (const batch of batches) {
+      const listing = batch
+        .map(
+          (c) =>
+            `--- FRAGMENT id=${JSON.stringify(c.id)} ---\n${c.text.trim()}`,
+        )
+        .join("\n\n");
+
+      const object = await extractBatchWithFallback(listing);
+
+      facts.push(...(object.facts ?? []));
+      relations.push(...(object.relations ?? []));
+      salientObjects.push(...(object.salientObjects ?? []));
+      selfContradictions.push(...(object.selfContradictions ?? []));
+      reasoningSignals.push(...(object.reasoningSignals ?? []));
+      causalChains.push(...(object.causalChains ?? []));
+      motivationAssessments.push(...(object.motivationAssessments ?? []));
+      consequenceAssessments.push(...(object.consequenceAssessments ?? []));
     }
 
     return NextResponse.json({
@@ -190,6 +403,10 @@ export async function POST(req: Request) {
       relations,
       salientObjects,
       selfContradictions,
+      reasoningSignals,
+      causalChains,
+      motivationAssessments,
+      consequenceAssessments,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "plot-extract failed";

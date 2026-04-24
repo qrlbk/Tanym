@@ -18,6 +18,7 @@ export default function RightContextPanel() {
   const rightPanelTab = useUIStore((s) => s.rightPanelTab);
   const setRightPanelTab = useUIStore((s) => s.setRightPanelTab);
   const activeSceneId = useUIStore((s) => s.activeSceneId);
+  const workspaceView = useUIStore((s) => s.workspaceView);
   const getSceneById = useProjectStore((s) => s.getSceneById);
   const editor = useEditorContext();
   const selectionPreview = useEditorState({
@@ -170,6 +171,11 @@ export default function RightContextPanel() {
             {selectionPreview || "Нет выделения"}
           </span>
         </div>
+        {workspaceView === "graph" && rightPanelTab === "story" && (
+          <div className="truncate">
+            Graph: <span style={{ color: UI_COLORS.storyPanel.textPrimary }}>открыт в центре</span>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0">

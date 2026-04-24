@@ -33,6 +33,7 @@ import { useAIStore } from "@/stores/aiStore";
 import { buildEditorContextPayload } from "@/lib/ai/editor-context";
 import { buildCharacterContextSummary } from "@/lib/ai/character-context";
 import { buildProjectContextFromStores } from "@/lib/ai/project-context";
+import { buildStoryReasoningContext } from "@/lib/ai/story-reasoning-context";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePlotStoryStore } from "@/stores/plotStoryStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -216,6 +217,7 @@ export default function AIPanel({
           const prof =
             focusedId && proj?.characterProfiles.find((c) => c.id === focusedId);
           const facts = usePlotStoryStore.getState().facts;
+          const storyState = usePlotStoryStore.getState();
           const characterContext =
             prof ? buildCharacterContextSummary(prof, facts) : null;
           const activeSceneId = useUIStore.getState().activeSceneId;
@@ -235,6 +237,12 @@ export default function AIPanel({
               editorContext: buildEditorContextPayload(editorRef.current),
               characterContext,
               projectContext,
+              storyReasoningContext: buildStoryReasoningContext({
+                focusedCharacterName: prof?.displayName ?? null,
+                motivationAssessments: storyState.motivationAssessments,
+                consequenceAssessments: storyState.consequenceAssessments,
+                causalChains: storyState.causalChains,
+              }),
             },
           };
         },

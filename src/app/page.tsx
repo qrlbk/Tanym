@@ -10,6 +10,7 @@ import TableContextRibbon from "@/components/Ribbon/TableContextRibbon";
 import HorizontalRuler from "@/components/Ruler/HorizontalRuler";
 import SceneCanvas from "@/components/Canvas/SceneCanvas";
 import DocxPreview from "@/components/Canvas/DocxPreview";
+import StoryGraphCanvas from "@/components/PlotStory/StoryGraphCanvas";
 import SceneTabs from "@/components/Editor/SceneTabs";
 import StatusBar from "@/components/StatusBar/StatusBar";
 import FindReplaceDialog from "@/components/Dialogs/FindReplace";
@@ -32,6 +33,7 @@ export default function Home() {
   const startScreen = useUIStore((s) => s.startScreen);
   const showRuler = useUIStore((s) => s.showRuler);
   const viewMode = useUIStore((s) => s.viewMode);
+  const workspaceView = useUIStore((s) => s.workspaceView);
   const previewData = useUIStore((s) => s.previewData);
   const writerModeEnabled = useUIStore((s) => s.writerModeEnabled);
   const showChapterNavigator = useUIStore((s) => s.showChapterNavigator);
@@ -78,7 +80,9 @@ export default function Home() {
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <SceneTabs />
                 {showRuler && viewMode === "edit" && <HorizontalRuler />}
-                {viewMode === "preview" && previewData ? (
+                {workspaceView === "graph" ? (
+                  <StoryGraphCanvas />
+                ) : viewMode === "preview" && previewData ? (
                   <DocxPreview data={previewData} />
                 ) : (
                   <SceneCanvas />

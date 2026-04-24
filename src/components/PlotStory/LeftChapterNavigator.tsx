@@ -14,6 +14,7 @@ export default function LeftChapterNavigator() {
   const renameChapter = useProjectStore((s) => s.renameChapter);
   const renameScene = useProjectStore((s) => s.renameScene);
   const deleteScene = useProjectStore((s) => s.deleteScene);
+  const deleteChapter = useProjectStore((s) => s.deleteChapter);
   const reorderScene = useProjectStore((s) => s.reorderScene);
   const getSceneById = useProjectStore((s) => s.getSceneById);
   const activeSceneId = useUIStore((s) => s.activeSceneId);
@@ -27,6 +28,15 @@ export default function LeftChapterNavigator() {
   const [chapterDraft, setChapterDraft] = useState("");
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [sceneDraft, setSceneDraft] = useState("");
+  const [confirmState, setConfirmState] = useState<
+    | null
+    | {
+        kind: "scene" | "chapter";
+        title: string;
+        message: string;
+        onConfirm: () => void;
+      }
+  >(null);
 
   const chapters = useMemo(() => project?.chapters ?? [], [project]);
 
@@ -76,18 +86,57 @@ export default function LeftChapterNavigator() {
   };
 
   const handleDeleteScene = (sceneId: string, title: string) => {
-    if (!window.confirm(`Удалить сцену «${title}» из проекта? Вкладка будет закрыта.`)) return;
-    const ok = deleteScene(sceneId);
-    if (!ok) {
-      pushToast("Должна остаться хотя бы одна сцена в проекте.", "error");
+    setConfirmState({
+      kind: "scene",
+      title: "Удалить сцену?",
+      message: `Вы действительно хотите удалить сцену «${title}»?`,
+      onConfirm: () => {
+        const ok = deleteScene(sceneId);
+        if (!ok) {
+          pushToast("Должна остаться хотя бы одна сцена в проекте.", "error");
+          return;
+        }
+        closeSceneTab(sceneId);
+      },
+    });
+  };
+
+  const handleDeleteChapter = (chapterId: string, chapterTitle: string, sceneIds: string[]) => {
+    if (chapters.length <= 1) {
+      pushToast("Должна остаться хотя бы одна глава в проекте.", "error");
       return;
     }
-    closeSceneTab(sceneId);
+    const scenesCount = sceneIds.length;
+    setConfirmState({
+      kind: "chapter",
+      title: "Удалить главу?",
+      message: `Вы действительно хотите удалить главу «${chapterTitle}»${
+        scenesCount > 0 ? ` вместе с ${scenesCount} сцен(ами)` : ""
+      }?`,
+      onConfirm: () => {
+        deleteChapter(chapterId);
+        for (const sceneId of sceneIds) {
+          closeSceneTab(sceneId);
+        }
+
+        if (activeSceneId && sceneIds.includes(activeSceneId)) {
+          const nextProject = useProjectStore.getState().project;
+          const fallbackScene = nextProject?.chapters.flatMap((chapter) => chapter.scenes)[0] ?? null;
+          if (fallbackScene) {
+            setActiveSceneId(fallbackScene.id);
+            openSceneTab({ sceneId: fallbackScene.id, title: fallbackScene.title });
+          } else {
+            setActiveSceneId(null);
+          }
+        }
+      },
+    });
   };
 
   return (
-    <aside className="hidden h-full w-[280px] min-w-[250px] border-r border-[#25272f] bg-[#121620] text-[#d1d5db] lg:block">
-      <div className="flex items-center justify-between gap-2 border-b border-[#25272f] px-3 py-2">
+    <>
+      <aside className="hidden h-full w-[280px] min-w-[250px] border-r border-[#25272f] bg-[#121620] text-[#d1d5db] lg:block">
+        <div className="flex items-center justify-between gap-2 border-b border-[#25272f] px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">
           Story Structure
         </span>
@@ -101,8 +150,8 @@ export default function LeftChapterNavigator() {
           Глава
         </button>
       </div>
-      <div className="h-[calc(100%-40px)] overflow-auto p-2">
-        {chapters.map((chapter) => (
+        <div className="h-[calc(100%-40px)] overflow-auto p-2">
+          {chapters.map((chapter) => (
           <section key={chapter.id} className="mb-2 rounded-md border border-[#2b3140] bg-[#161b27]">
             <div className="flex items-center justify-between gap-2 border-b border-[#2b3140] px-2 py-1.5">
               {editingChapterId === chapter.id ? (
@@ -154,6 +203,22 @@ export default function LeftChapterNavigator() {
                 <Plus size={12} />
                 Сцена
               </button>
+              <Tooltip content="Удалить главу" side="left">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleDeleteChapter(
+                      chapter.id,
+                      chapter.title,
+                      chapter.scenes.map((scene) => scene.id),
+                    )
+                  }
+                  className="inline-flex shrink-0 items-center rounded px-1.5 py-1 text-[#6b7280] hover:text-[#f87171]"
+                  aria-label={`Удалить главу ${chapter.title}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </Tooltip>
             </div>
             <div className="py-1">
               {chapter.scenes.map((scene, index) => {
@@ -226,8 +291,37 @@ export default function LeftChapterNavigator() {
               })}
             </div>
           </section>
-        ))}
-      </div>
-    </aside>
+          ))}
+        </div>
+      </aside>
+      {confirmState && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-sm rounded-lg border border-[#2b3140] bg-[#151b27] p-4">
+            <p className="text-sm font-semibold text-[#f3f4f6]">{confirmState.title}</p>
+            <p className="mt-2 text-sm text-[#cbd5e1]">{confirmState.message}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmState(null)}
+                className="rounded border border-[#3b4a6a] px-3 py-1.5 text-xs text-[#cbd5e1] hover:bg-[#1f2738]"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const fn = confirmState.onConfirm;
+                  setConfirmState(null);
+                  fn();
+                }}
+                className="rounded border border-[#7f1d1d] bg-[#3b1212] px-3 py-1.5 text-xs text-[#fecaca] hover:bg-[#4a1717]"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

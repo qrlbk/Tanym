@@ -11,6 +11,10 @@ import {
   type SelfContradictionInput,
   type ChekhovWarning,
   type WarningStatus,
+  type DeepReasoningSignal,
+  type CausalChain,
+  type MotivationAssessment,
+  type ConsequenceAssessment,
   normalizeConsistencyWarnings,
   normalizePlotFacts,
 } from "@/lib/plot-index/story-extraction";
@@ -24,6 +28,10 @@ type IncomingExtraction = {
   relations: IncomingRelation[];
   salientObjects: SalientObject[];
   selfContradictions?: SelfContradictionInput[];
+  reasoningSignals?: Omit<DeepReasoningSignal, "id">[];
+  causalChains?: Omit<CausalChain, "id">[];
+  motivationAssessments?: Omit<MotivationAssessment, "id">[];
+  consequenceAssessments?: Omit<ConsequenceAssessment, "id">[];
 };
 
 function fromSelfContradictions(
@@ -206,6 +214,10 @@ export interface PlotStoryState {
   salientObjects: SalientObject[];
   consistencyWarnings: ConsistencyWarning[];
   chekhovWarnings: ChekhovWarning[];
+  reasoningSignals: DeepReasoningSignal[];
+  causalChains: CausalChain[];
+  motivationAssessments: MotivationAssessment[];
+  consequenceAssessments: ConsequenceAssessment[];
   analysisPhase: "idle" | "analyzing" | "ready" | "error";
   analysisMessage: string | null;
   lastAnalyzedAt: number | null;
@@ -273,6 +285,10 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
   salientObjects: [],
   consistencyWarnings: [],
   chekhovWarnings: [],
+  reasoningSignals: [],
+  causalChains: [],
+  motivationAssessments: [],
+  consequenceAssessments: [],
   analysisPhase: "idle",
   analysisMessage: null,
   lastAnalyzedAt: null,
@@ -295,6 +311,10 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
       salientObjects: [],
       consistencyWarnings: [],
       chekhovWarnings: [],
+      reasoningSignals: [],
+      causalChains: [],
+      motivationAssessments: [],
+      consequenceAssessments: [],
       analysisPhase: "idle",
       analysisMessage: null,
       lastAnalyzedAt: null,
@@ -321,6 +341,10 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
         ? normalizeConsistencyWarnings(payload.consistencyWarnings)
         : state.consistencyWarnings,
       chekhovWarnings: payload.chekhovWarnings ?? state.chekhovWarnings,
+      reasoningSignals: payload.reasoningSignals ?? state.reasoningSignals,
+      causalChains: payload.causalChains ?? state.causalChains,
+      motivationAssessments: payload.motivationAssessments ?? state.motivationAssessments,
+      consequenceAssessments: payload.consequenceAssessments ?? state.consequenceAssessments,
       warningStatuses: payload.warningStatuses ?? state.warningStatuses,
       chunkSceneMap: payload.chunkSceneMap ?? state.chunkSceneMap,
       lastExtractionAt: payload.lastExtractionAt ?? state.lastExtractionAt,
@@ -354,6 +378,22 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
     debugWarningStats("applyFullExtraction", dedupedWarnings);
     const relations = mergeRelations([], payload.relations);
     const chekhov = computeChekhovWarnings(chunks, payload.salientObjects);
+    const reasoningSignals = (payload.reasoningSignals ?? []).map((item, idx) => ({
+      ...item,
+      id: `reasoning-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+    }));
+    const causalChains = (payload.causalChains ?? []).map((item, idx) => ({
+      ...item,
+      id: `chain-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+    }));
+    const motivationAssessments = (payload.motivationAssessments ?? []).map((item, idx) => ({
+      ...item,
+      id: `motivation-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+    }));
+    const consequenceAssessments = (payload.consequenceAssessments ?? []).map((item, idx) => ({
+      ...item,
+      id: `consequence-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+    }));
     const nextStatuses = { ...state.warningStatuses };
     for (const warning of dedupedWarnings) {
       if (!nextStatuses[warning.key]) {
@@ -380,6 +420,10 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
       salientObjects: payload.salientObjects,
       consistencyWarnings: dedupedWarnings,
       chekhovWarnings: chekhov,
+      reasoningSignals,
+      causalChains,
+      motivationAssessments,
+      consequenceAssessments,
       analysisPhase: "ready",
       analysisMessage: "Сюжетная память обновлена",
       lastAnalyzedAt: Date.now(),
@@ -417,6 +461,18 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
       const filteredSalient = state.salientObjects.filter(
         (item) => !previousChunkIds.has(item.chunkId),
       );
+      const filteredReasoningSignals = state.reasoningSignals.filter((item) =>
+        item.chunkIds.every((chunkId) => !previousChunkIds.has(chunkId)),
+      );
+      const filteredCausalChains = state.causalChains.filter((item) =>
+        item.chunkIds.every((chunkId) => !previousChunkIds.has(chunkId)),
+      );
+      const filteredMotivationAssessments = state.motivationAssessments.filter((item) =>
+        item.chunkIds.every((chunkId) => !previousChunkIds.has(chunkId)),
+      );
+      const filteredConsequenceAssessments = state.consequenceAssessments.filter((item) =>
+        item.chunkIds.every((chunkId) => !previousChunkIds.has(chunkId)),
+      );
       const filteredWarnings = state.consistencyWarnings.filter((warning) => {
         const hasOldChunk = [...warning.newChunkIds, ...warning.previousChunkIds].some((chunkId) =>
           previousChunkIds.has(chunkId),
@@ -427,6 +483,34 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
       const mergedFactsResult = mergeFactsAndDetectConflicts(filteredFacts, payload.facts);
       const mergedRelations = mergeRelations(filteredRelations, payload.relations);
       const mergedSalient = [...filteredSalient, ...payload.salientObjects];
+      const mergedReasoningSignals = [
+        ...filteredReasoningSignals,
+        ...(payload.reasoningSignals ?? []).map((item, idx) => ({
+          ...item,
+          id: `reasoning-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+        })),
+      ];
+      const mergedCausalChains = [
+        ...filteredCausalChains,
+        ...(payload.causalChains ?? []).map((item, idx) => ({
+          ...item,
+          id: `chain-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+        })),
+      ];
+      const mergedMotivationAssessments = [
+        ...filteredMotivationAssessments,
+        ...(payload.motivationAssessments ?? []).map((item, idx) => ({
+          ...item,
+          id: `motivation-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+        })),
+      ];
+      const mergedConsequenceAssessments = [
+        ...filteredConsequenceAssessments,
+        ...(payload.consequenceAssessments ?? []).map((item, idx) => ({
+          ...item,
+          id: `consequence-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+        })),
+      ];
       const ruleWarnings = detectRuleContradictionsFromChunks(chunks).filter(
         (warning) => warning.confidence >= strictness.minRuleConfidence,
       );
@@ -498,6 +582,10 @@ export const usePlotStoryStore = create<PlotStoryState>((set, get) => ({
         facts: mergedFactsResult.facts,
         relations: mergedRelations,
         salientObjects: mergedSalient,
+        reasoningSignals: mergedReasoningSignals,
+        causalChains: mergedCausalChains,
+        motivationAssessments: mergedMotivationAssessments,
+        consequenceAssessments: mergedConsequenceAssessments,
         consistencyWarnings: mergedWarnings,
         chekhovWarnings: chekhov,
         analysisPhase: "ready",

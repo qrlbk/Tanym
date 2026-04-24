@@ -22,7 +22,20 @@ describe("POST /api/ai/plot-extract", () => {
   it("returns selfContradictions from model output", async () => {
     generateObjectMock.mockResolvedValue({
       object: {
-        facts: [],
+        facts: [
+          {
+            entity: "Hero",
+            characterCanonicalId: "hero",
+            entityAliases: [],
+            entityType: "character",
+            entityConfidence: 0.9,
+            narrativeRole: null,
+            attribute: "goal",
+            value: "save village",
+            chunkIds: ["c-1"],
+            quote: "save village",
+          },
+        ],
         relations: [],
         salientObjects: [],
         selfContradictions: [
@@ -35,6 +48,10 @@ describe("POST /api/ai/plot-extract", () => {
             confidence: 0.9,
           },
         ],
+        reasoningSignals: [],
+        causalChains: [],
+        motivationAssessments: [],
+        consequenceAssessments: [],
       },
     });
 
@@ -43,6 +60,7 @@ describe("POST /api/ai/plot-extract", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chunks: [{ id: "c-1", text: "Стояла абсолютная тишина, но слышались крики." }],
+        targetLanguage: "scene_cyrillic",
       }),
     });
 
@@ -50,9 +68,11 @@ describe("POST /api/ai/plot-extract", () => {
     expect(res.status).toBe(200);
     const payload = (await res.json()) as {
       selfContradictions: Array<{ confidence: number; kind: string }>;
+      facts: Array<{ entity: string }>;
     };
     expect(payload.selfContradictions.length).toBe(1);
     expect(payload.selfContradictions[0].kind).toBe("fact_conflict");
     expect(payload.selfContradictions[0].confidence).toBeGreaterThan(0.5);
+    expect(payload.facts.length).toBe(0);
   });
 });

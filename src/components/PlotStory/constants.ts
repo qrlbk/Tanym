@@ -7,6 +7,8 @@
 export type PlotStoryTabId =
   | "characters"
   | "cards"
+  | "graph"
+  | "problems"
   | "conflicts"
   | "timeline"
   | "resolutions";

@@ -7,6 +7,8 @@ const extractSemaphore = createSemaphore(3);
 export type PlotExtractResponse = {
   facts: {
     entity: string;
+    characterCanonicalId?: string | null;
+    entityAliases?: string[];
     entityType:
       | "character"
       | "object"
@@ -55,12 +57,63 @@ export type PlotExtractResponse = {
     chunkIds: string[];
     confidence: number;
   }[];
+  reasoningSignals: {
+    type:
+      | "characterIntent"
+      | "motive"
+      | "internalConflict"
+      | "decision"
+      | "consequence"
+      | "promisePayoff";
+    entity: string;
+    characterCanonicalId?: string | null;
+    summary: string;
+    evidenceQuote: string;
+    chunkIds: string[];
+    confidence: number;
+  }[];
+  causalChains: {
+    trigger: string;
+    decision: string;
+    action: string;
+    consequence: string;
+    involvedEntities: string[];
+    chunkIds: string[];
+    confidence: number;
+    evidenceQuote: string;
+  }[];
+  motivationAssessments: {
+    entity: string;
+    characterCanonicalId?: string | null;
+    motivation: string;
+    verdict: "strong" | "weak";
+    reason: string;
+    evidenceQuote: string;
+    chunkIds: string[];
+    confidence: number;
+  }[];
+  consequenceAssessments: {
+    event: string;
+    verdict: "clear" | "missing";
+    reason: string;
+    evidenceQuote: string;
+    chunkIds: string[];
+    confidence: number;
+  }[];
 };
 
 const MAX_BATCH_CHARS = 9000;
 const MAX_RETRIES = 3;
 
 type ExtractChunk = { id: string; text: string };
+
+type TargetLanguage = "scene_cyrillic" | "scene_latin";
+
+function detectTargetLanguage(text: string): TargetLanguage {
+  const cyr = (text.match(/[\u0400-\u04FF]/g) ?? []).length;
+  const lat = (text.match(/[A-Za-z]/g) ?? []).length;
+  return cyr >= lat ? "scene_cyrillic" : "scene_latin";
+}
 
 function splitChunksForTransport(chunks: ExtractChunk[]): ExtractChunk[][] {
   const out: ExtractChunk[][] = [];
@@ -85,12 +138,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function postExtractBatch(batch: ExtractChunk[]): Promise<PlotExtractResponse> {
+  const targetLanguage = detectTargetLanguage(batch.map((item) => item.text).join("\n"));
   let res: Response;
   try {
     res = await fetch("/api/ai/plot-extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chunks: batch }),
+      body: JSON.stringify({ chunks: batch, targetLanguage }),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -118,6 +172,8 @@ async function postExtractBatch(batch: ExtractChunk[]): Promise<PlotExtractRespo
   return {
     facts: (data.facts ?? []).map((fact) => ({
       entity: fact.entity,
+      characterCanonicalId: fact.characterCanonicalId ?? null,
+      entityAliases: fact.entityAliases ?? [],
       entityType: fact.entityType ?? "other",
       entityConfidence:
         typeof fact.entityConfidence === "number"
@@ -132,6 +188,10 @@ async function postExtractBatch(batch: ExtractChunk[]): Promise<PlotExtractRespo
     relations: data.relations ?? [],
     salientObjects: data.salientObjects ?? [],
     selfContradictions: data.selfContradictions ?? [],
+    reasoningSignals: data.reasoningSignals ?? [],
+    causalChains: data.causalChains ?? [],
+    motivationAssessments: data.motivationAssessments ?? [],
+    consequenceAssessments: data.consequenceAssessments ?? [],
   };
 }
 
@@ -179,6 +239,10 @@ export async function fetchPlotExtractionForChunks(
     relations: [],
     salientObjects: [],
     selfContradictions: [],
+    reasoningSignals: [],
+    causalChains: [],
+    motivationAssessments: [],
+    consequenceAssessments: [],
   };
 
   try {
@@ -188,6 +252,10 @@ export async function fetchPlotExtractionForChunks(
       merged.relations.push(...part.relations);
       merged.salientObjects.push(...part.salientObjects);
       merged.selfContradictions.push(...part.selfContradictions);
+      merged.reasoningSignals.push(...part.reasoningSignals);
+      merged.causalChains.push(...part.causalChains);
+      merged.motivationAssessments.push(...part.motivationAssessments);
+      merged.consequenceAssessments.push(...part.consequenceAssessments);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

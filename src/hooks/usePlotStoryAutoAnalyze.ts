@@ -10,6 +10,11 @@ import { fetchPlotExtractionForChunks } from "@/lib/plot-index/plot-extract-clie
 import { usePlotStoryStore } from "@/stores/plotStoryStore";
 import { usePlotIndexStore } from "@/stores/plotIndexStore";
 import { notifyMissingCharacterCardsIfNeeded } from "@/lib/project/character-card-toasts";
+import { useProjectStore } from "@/stores/projectStore";
+import {
+  loadSceneFingerprintFromSqlite,
+  saveSceneCacheEntryToSqlite,
+} from "@/lib/plot-story-persistence";
 
 const DEBOUNCE_MS = 2800;
 const MIN_TEXT_CHARS = 120;
@@ -37,7 +42,7 @@ export function usePlotStoryAutoAnalyze(
     const sceneId = sceneContext.sceneId;
     let disposed = false;
 
-    const execute = () => {
+    const execute = async () => {
       if (disposed) return;
       const text = editor.state.doc.textContent.trim();
       if (text.length < MIN_TEXT_CHARS) {
@@ -45,10 +50,38 @@ export function usePlotStoryAutoAnalyze(
       }
       const fp = sceneTextFingerprint(text);
       if (fp === lastDoneFingerprintBySceneRef.current[sceneId]) {
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[plot-memory] local-fingerprint-hit", { sceneId });
+        }
         return;
       }
       const cached = usePlotIndexStore.getState().sceneCache[sceneId];
-      if (cached?.fingerprint === fp) return;
+      if (cached?.fingerprint === fp) {
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[plot-memory] scene-cache-hit", { sceneId });
+        }
+        return;
+      }
+      if (!cached) {
+        const persistedFp = await loadSceneFingerprintFromSqlite({
+          projectId: useProjectStore.getState().project?.id ?? null,
+          sceneId,
+        });
+        if (persistedFp === fp) {
+          if (process.env.NODE_ENV === "development") {
+            console.debug("[plot-memory] sqlite-fingerprint-hit", { sceneId });
+          }
+          usePlotIndexStore.getState().setSceneCacheEntry(sceneId, {
+            fingerprint: fp,
+            entities: [],
+            lastAnalyzedAt: Date.now(),
+          });
+          return;
+        }
+      }
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[plot-memory] cache-miss", { sceneId });
+      }
       if (runningRef.current) {
         rerunRequestedRef.current = true;
         return;
@@ -74,6 +107,13 @@ export function usePlotStoryAutoAnalyze(
             .mergeSceneExtraction(sceneId, data, chunks);
           lastDoneFingerprintBySceneRef.current[sceneId] = fp;
           usePlotIndexStore.getState().setSceneCacheEntry(sceneId, {
+            fingerprint: fp,
+            entities: data.facts.map((fact) => fact.entity),
+            lastAnalyzedAt: Date.now(),
+          });
+          void saveSceneCacheEntryToSqlite({
+            projectId: useProjectStore.getState().project?.id ?? null,
+            sceneId,
             fingerprint: fp,
             entities: data.facts.map((fact) => fact.entity),
             lastAnalyzedAt: Date.now(),
@@ -108,7 +148,7 @@ export function usePlotStoryAutoAnalyze(
     const schedule = (delay = DEBOUNCE_MS) => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        execute();
+        void execute();
       }, delay);
     };
 

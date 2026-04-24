@@ -53,6 +53,8 @@ export default function CharacterCardsPanel() {
   const rejectCharacterPatch = useProjectStore((s) => s.rejectCharacterPatch);
 
   const facts = usePlotStoryStore((s) => s.facts);
+  const motivationAssessments = usePlotStoryStore((s) => s.motivationAssessments);
+  const reasoningSignals = usePlotStoryStore((s) => s.reasoningSignals);
   const chunkSceneMap = usePlotStoryStore((s) => s.chunkSceneMap);
 
   const setRightPanelTab = useUIStore((s) => s.setRightPanelTab);
@@ -154,6 +156,18 @@ export default function CharacterCardsPanel() {
     if (!selected) return [];
     return factsForCharacter(facts, selected.displayName, selected.aliases);
   }, [selected, facts]);
+  const selectedReasoning = useMemo(() => {
+    if (!selected) return { motivations: [], signals: [] };
+    const name = selected.displayName.toLowerCase();
+    return {
+      motivations: motivationAssessments.filter((item) =>
+        item.entity.toLowerCase().includes(name),
+      ),
+      signals: reasoningSignals.filter((item) =>
+        item.entity.toLowerCase().includes(name),
+      ),
+    };
+  }, [motivationAssessments, reasoningSignals, selected]);
 
   const draftSourcePreview = useMemo(() => {
     if (!selected) return null;
@@ -800,6 +814,27 @@ export default function CharacterCardsPanel() {
               }}
             />
           </label>
+
+          {(selectedReasoning.motivations.length > 0 || selectedReasoning.signals.length > 0) && (
+            <div
+              className="rounded-md border p-2.5 space-y-2"
+              style={{ borderColor: THEME.surface.inputBorder, background: THEME.surface.elevated }}
+            >
+              <p className="text-[11px] font-semibold" style={{ color: UI_COLORS.storyPanel.textPrimary }}>
+                Reasoning-профиль персонажа
+              </p>
+              {selectedReasoning.motivations.slice(0, 4).map((item) => (
+                <p key={item.id} className="text-[11px]" style={{ color: UI_COLORS.storyPanel.textSecondary }}>
+                  Мотив ({item.verdict}, {Math.round(item.confidence * 100)}%): {item.motivation}
+                </p>
+              ))}
+              {selectedReasoning.signals.slice(0, 4).map((item) => (
+                <p key={item.id} className="text-[11px]" style={{ color: UI_COLORS.storyPanel.textSecondary }}>
+                  {item.type}: {item.summary}
+                </p>
+              ))}
+            </div>
+          )}
 
           <div
             className="rounded-md border p-2.5 space-y-2"

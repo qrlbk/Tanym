@@ -11,6 +11,7 @@ interface Margins {
 }
 
 export type ViewMode = "edit" | "preview";
+export type WorkspaceView = "scene" | "preview" | "graph";
 export type RightPanelTab = "story" | "ai";
 export type WriterFocusMode = "draft" | "rewrite" | "continuity";
 export type ContinuityFilter = "all" | "new" | "acknowledged" | "resolved" | "ignored";
@@ -42,6 +43,8 @@ interface UIState {
   setFirstLineIndent: (indent: number) => void;
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
+  workspaceView: WorkspaceView;
+  setWorkspaceView: (mode: WorkspaceView) => void;
   previewData: ArrayBuffer | null;
   setPreviewData: (data: ArrayBuffer | null) => void;
   /** Пунктир границы области набора внутри полей (показать границы набора). */
@@ -102,6 +105,8 @@ export const useUIStore = create<UIState>((set) => ({
   setFirstLineIndent: (firstLineIndent) => set({ firstLineIndent }),
   viewMode: "edit",
   setViewMode: (viewMode) => set({ viewMode }),
+  workspaceView: "scene",
+  setWorkspaceView: (workspaceView) => set({ workspaceView }),
   previewData: null,
   setPreviewData: (previewData) => set({ previewData }),
   /** По умолчанию — без пунктира вокруг области набора. */
